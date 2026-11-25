@@ -11,7 +11,7 @@ being fixed. It is updated after each verification pass.
 
 | Workflow | Run | Failure | Fix owner | Status |
 |---|---|---|---|---|
-| Rust | 45689133123 | `cargo audit` found RUSTSEC-2026-0387 (crypto-bigint 0.5.5) and RUSTSEC-2023-0071 (rsa 0.9.10), both transitive via rPGP 0.21.1 | narrow ignores in `.cargo/audit.toml`; real `cargo audit` job | config fixed; re-running |
+| Rust | 45689133123 | `cargo audit` advisories + cargo-deny v2 schema errors + two GPL-compatible licenses not in the allow list | narrow audit ignores, cargo-deny v2 migration, `bzip2-1.0.6` and `CDLA-Permissive-2.0` allowed | audit/clippy/fmt green; cargo-deny re-running |
 | Android APK | 45689139845 | `android-actions/setup-android@v3` runs removed `sdkmanager tools` package and crashes | use preinstalled SDK on GitHub runners, pin Gradle 8.13 | ✅ green (also fixed invalid IME `android:locale` resource) |
 | Desktop Release | 45689139743 | 53 Rust errors in Tauri backend: `newpgp_core::Result` alias used with two generic args, Tauri commands returning a non-serializable error | command signatures to `Result<T, String>` | ✅ green on Windows, macOS and Linux |
 | Docs | 45696646355 | lychee failed on a handshake error for fsf.org and redirect links | replaced with stable GNU docs URLs, updated redirects | ✅ green |
