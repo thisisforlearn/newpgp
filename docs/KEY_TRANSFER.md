@@ -96,7 +96,7 @@ Caveats:
 ## References
 
 - RFC 9580 — <https://www.rfc-editor.org/rfc/rfc9580.html>
-- Autocrypt Level 1 (Setup Message pattern) — <https://autocrypt.org/level1.html>
+- Autocrypt Level 1 (Setup Message pattern) — <https://docs.autocrypt.org/level1.html>
 - keys.openpgp.org — <https://keys.openpgp.org/>
 - WKD draft — <https://datatracker.ietf.org/doc/html/draft-koch-openpgp-webkey-service>
 - rPGP — <https://github.com/rpgp/rpgp>

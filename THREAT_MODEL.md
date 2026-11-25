@@ -99,8 +99,8 @@ Encryption cannot protect you if you are tricked into giving away your password 
 
 - RFC 9580 — <https://www.rfc-editor.org/rfc/rfc9580.html>
 - rPGP — <https://github.com/rpgp/rpgp>
-- Autocrypt Level 1 — <https://autocrypt.org/level1.html>
+- Autocrypt Level 1 — <https://docs.autocrypt.org/level1.html>
 - keys.openpgp.org — <https://keys.openpgp.org/>
 - Signal Double Ratchet — <https://signal.org/docs/specifications/doubleratchet/>
-- age — <https://age-encryption.org/>
+- age — <https://github.com/FiloSottile/age>
 - Sequoia PGP — <https://sequoia-pgp.org/>
