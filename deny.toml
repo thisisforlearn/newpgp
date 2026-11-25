@@ -1,6 +1,7 @@
 # cargo-deny policy. Run with: cargo deny check
 [graph]
-targets = ["all"]
+# Omit `targets`: cargo-deny then considers every target's dependencies,
+# which is correct for a project that ships on Windows, macOS and Linux.
 all-features = false
 
 [advisories]
