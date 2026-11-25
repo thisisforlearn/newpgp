@@ -3,12 +3,12 @@ name: Rust
 on:
   push:
     branches: [main]
-  paths:
-    - "Cargo.toml"
-    - "Cargo.lock"
-    - "crates/**"
-    - ".github/workflows/rust.yml"
-    - "deny.toml"
+    paths:
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "crates/**"
+      - ".github/workflows/rust.yml"
+      - "deny.toml"
   pull_request:
     branches: [main]
     paths:

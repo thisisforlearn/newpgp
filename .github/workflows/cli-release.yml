@@ -12,6 +12,8 @@ jobs:
   build:
     name: CLI (${{ matrix.target }})
     runs-on: ${{ matrix.os }}
+    permissions:
+      contents: write
     strategy:
       fail-fast: false
       matrix:
@@ -44,8 +46,6 @@ jobs:
 
       - name: Publish CLI binary to GitHub release
         if: startsWith(github.ref, 'refs/tags/v')
-        permissions:
-          contents: write
         uses: softprops/action-gh-release@v2
         with:
           files: target/release/${{ matrix.binary }}
