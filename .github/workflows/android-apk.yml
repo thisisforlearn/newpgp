@@ -127,7 +127,7 @@ jobs:
 
       - name: Publish GitHub release
         if: env.NEWPGP_KEYSTORE_BASE64 != '' && env.NEWPGP_KEYSTORE_PASSWORD != '' && env.NEWPGP_KEY_ALIAS != '' && env.NEWPGP_KEY_PASSWORD != ''
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: android/keyboard/app/build/outputs/apk/release/*.apk
           generate_release_notes: true
