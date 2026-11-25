@@ -17,6 +17,16 @@ on the current version lines.
 > bumps showed a failing `Build debug APK` check. Decisions below are based on
 > upstream breakage, not solely on the current check state. The Android APK failure
 > needs a separate investigation — it is not caused by a major-version bump.
+> Update: the Android failure was fixed in the workflow; both kept PRs were
+> rebased onto the fixed `main` and their checks re-run.
+
+### Follow-up (same day)
+
+Dependabot recreated a few of the held upgrades at nearby versions (#25–#30).
+Those were also closed, and the `ignore` rules were changed from exact versions
+to **version ranges** (`>=0.11.0`, `>=0.10.0`, etc.) so the whole held line is
+blocked instead of one release. Patch updates on the currently used lines still
+flow normally.
 
 ## Decisions
 
@@ -60,12 +70,12 @@ on the current version lines.
 ## Primary sources consulted
 
 - TypeScript 7: https://devblogs.microsoft.com/typescript/announcing-typescript-7-0/
-- Vitest 5 migration: https://vitest.dev/guide/migration.html
+- Vitest 5 migration: https://vitest.dev/guide/migration/
 - RustCrypto `sha2` 0.11: https://github.com/RustCrypto/hashes/blob/master/sha2/CHANGELOG.md
 - RustCrypto `digest` 0.11: https://github.com/RustCrypto/traits/blob/master/digest/CHANGELOG.md
 - rand changelog: https://github.com/rust-random/rand/blob/master/CHANGELOG.md
 - Gradle 9 upgrade guide: https://docs.gradle.org/9.0.0/userguide/upgrading_version_8.html
-- AGP releases: https://developer.android.com/build/releases/gradle-plugin
+- AGP releases: https://developer.android.com/build/releases/agp-9-5-0-release-notes
 - Kotlin 2.4: https://kotlinlang.org/docs/whatsnew24.html
 - jsdom releases: https://github.com/jsdom/jsdom/releases
 - esbuild 0.28: https://github.com/evanw/esbuild/releases/tag/v0.28.0
