@@ -1,6 +1,6 @@
 # cargo-deny policy. Run with: cargo deny check
 [graph]
-targets = []
+targets = ["all"]
 all-features = false
 
 [advisories]

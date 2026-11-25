@@ -63,9 +63,9 @@ following happens:
 - a new advisory affects these crates or a different NewPGP code path;
 - the `pgp` dependency version changes for any reason.
 
-`warn_unused_ignores = true` in `.cargo/audit.toml` makes `cargo audit` warn as
-soon as either ignore stops matching the lockfile, which is an additional
-reminder to clean up the config.
+The manual review conditions above are the reminder to clean up the config:
+run `cargo audit` after every dependency change and remove either ignore as soon
+as it stops matching the lockfile.
 
 ## How to re-check
 

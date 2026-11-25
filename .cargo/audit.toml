@@ -10,9 +10,9 @@
 # met; do not replace them with broad severity/target/yanked filters.
 
 [advisories]
-# Fail loudly if an ignore becomes stale (advisory no longer in the lockfile).
-warn_unused_ignores = true
-
+# Note: cargo-audit 0.23 accepts only `ignore`, `informational_warnings` and
+# `severity_threshold` in this section. Stale ignores are caught by the manual
+# review checklist in docs/SECURITY_AUDIT.md.
 ignore = [
     # RUSTSEC-2026-0387 - crypto-bigint 0.5.5: operations intended to be
     # constant-time may branch on secret data (subtraction, zero counting,
