@@ -6,6 +6,16 @@
 **Contact for code, changes and security:** nekomeowpurr@proton.me
 **License:** GNU General Public License, version 3 **or later** (GPL-3.0-or-later). See `LICENSE`.
 
+## Contributors
+
+- **thisisforlearn** — primary maintainer and project owner; the GitHub handle of
+  Vaibhav: https://github.com/thisisforlearn
+- **sudo-linux-neko** (@sudo-linux-neko) — contributor: https://github.com/sudo-linux-neko
+
+See [CONTRIBUTORS.md](CONTRIBUTORS.md) and [AUTHORS.md](AUTHORS.md) for the roles
+and contact details. Official project: https://github.com/thisisforlearn/newpgp.
+More platforms are coming soon.
+
 ## Why GPL-3.0-or-later
 
 GPLv2 was originally requested, but it has a real dependency nuance: a few

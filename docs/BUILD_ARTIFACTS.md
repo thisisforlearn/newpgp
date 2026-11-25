@@ -3,6 +3,10 @@
 Official project: https://github.com/thisisforlearn/newpgp
 Contact: nekomeowpurr@proton.me
 
+NewPGP is maintained by Vaibhav (thisisforlearn) with contributor
+sudo-linux-neko; see [AUTHORS.md](../AUTHORS.md) and
+[CONTRIBUTORS.md](../CONTRIBUTORS.md).
+
 ## Android keyboard APK
 
 The repository does not commit the Gradle wrapper JAR or an Android SDK, and

@@ -67,17 +67,22 @@ jobs:
   audit:
     name: Security audit
     runs-on: ubuntu-latest
-    # rustsec/audit-check fetches the advisory database over the network and
-    # needs to annotate results, so it requires these additional permissions.
-    permissions:
-      contents: read
-      issues: write
-      checks: write
     steps:
       - uses: actions/checkout@v4
-      - uses: rustsec/audit-check@v2.0.0
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          key: audit
+      # Run `cargo audit` directly rather than rustsec/audit-check: that action
+      # ignores cargo-audit's exit code and only publishes annotations, whereas
+      # this job must genuinely fail on an unignored advisory. cargo-audit reads
+      # .cargo/audit.toml from the working directory (the repository root);
+      # `--file` only chooses the lockfile, so the two documented, narrowly
+      # scoped ignores in that config are honoured. No `continue-on-error`.
+      - name: Install cargo-audit
+        run: cargo install cargo-audit --locked
+      - name: Audit dependencies
+        run: cargo audit --file Cargo.lock
 
   deny:
     name: cargo-deny

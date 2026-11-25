@@ -8,6 +8,10 @@ Plain-language answers to common questions.
 
 A friendly set of tools for sending private email using the OpenPGP standard (RFC 9580). It includes a built-in mail app, a browser extension for Gmail/Outlook, mobile apps, and an Android keyboard. It is not a new encryption protocol — it speaks standard PGP.
 
+### Who is behind NewPGP?
+
+NewPGP is led by **Vaibhav** (GitHub: [thisisforlearn](https://github.com/thisisforlearn)), the author and primary maintainer, with **sudo-linux-neko** ([@sudo-linux-neko](https://github.com/sudo-linux-neko)) as a contributor. See [AUTHORS.md](../AUTHORS.md) and [CONTRIBUTORS.md](../CONTRIBUTORS.md). The official project page is <https://github.com/thisisforlearn/newpgp>; more platforms are coming soon.
+
 ### Do I need to understand cryptography?
 
 No. You create a key pair once (the app walks you through it), pick a good password, and write email normally. NewPGP handles the rest. If you want the details, see [ARCHITECTURE.md](../ARCHITECTURE.md).
@@ -129,6 +133,8 @@ Yes — that is exactly why the default is to **send both** the normal message a
 
 ## References
 
+- Official project — <https://github.com/thisisforlearn/newpgp>
+- Authors and contributors — [AUTHORS.md](../AUTHORS.md), [CONTRIBUTORS.md](../CONTRIBUTORS.md)
 - RFC 9580 — <https://www.rfc-editor.org/rfc/rfc9580.html>
 - WKD draft — <https://datatracker.ietf.org/doc/html/draft-koch-openpgp-webkey-service>
 - keys.openpgp.org — <https://keys.openpgp.org/>

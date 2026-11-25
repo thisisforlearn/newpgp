@@ -25,7 +25,10 @@ search-index.bin
 .tmp/
 .npm-cache/
 .cargo-home/
+.cargo-home2/
 .desktop-target/
+.desktop-target2/
+apps/desktop/src-tauri/gen/
 
 *.tmp
 *.log

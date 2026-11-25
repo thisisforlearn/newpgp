@@ -15,6 +15,7 @@ version = "0.1.0"
 edition = "2021"
 rust-version = "1.88"
 license = "GPL-3.0-or-later"
+authors = ["Vaibhav (@thisisforlearn) <nekomeowpurr@proton.me>", "thisisforlearn", "sudo-linux-neko"]
 
 [workspace.dependencies]
 newpgp-core = { path = "crates/newpgp-core", version = "0.1.0" }
