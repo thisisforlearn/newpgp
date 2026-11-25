@@ -21,6 +21,11 @@ jobs:
   debug:
     name: Build debug APK
     runs-on: ubuntu-latest
+    # ubuntu-latest already ships an Android SDK; do not use setup-android@v3
+    # (it tries to install the removed `tools` package and fails).
+    env:
+      ANDROID_HOME: /usr/local/lib/android/sdk
+      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
     steps:
       - uses: actions/checkout@v4
 
@@ -30,24 +35,34 @@ jobs:
           java-version: "17"
           cache: gradle
 
-      - uses: android-actions/setup-android@v3
-
-      - name: Install Android platform 36 and build tools
+      - name: Accept licenses and install Android SDK 36
         run: |
-          yes | sdkmanager --licenses > /dev/null 2>&1 || true
-          sdkmanager "platforms;android-36" "build-tools;36.0.0"
+          set -euo pipefail
+          SDKMGR=""
+          if command -v sdkmanager >/dev/null 2>&1; then
+            SDKMGR="$(command -v sdkmanager)"
+          elif [ -x "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" ]; then
+            SDKMGR="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          else
+            # Runners sometimes only expose a versioned cmdline-tools folder.
+            SDKMGR="$(find "$ANDROID_HOME/cmdline-tools" -mindepth 3 -maxdepth 3 -type f -name sdkmanager 2>/dev/null | sort -V | tail -n 1 || true)"
+          fi
+          if [ -z "$SDKMGR" ] || [ ! -x "$SDKMGR" ]; then
+            echo "::error::sdkmanager was not found under $ANDROID_HOME/cmdline-tools"
+            exit 1
+          fi
+          echo "Using sdkmanager: $SDKMGR"
+          yes | "$SDKMGR" --licenses > /dev/null 2>&1 || true
+          "$SDKMGR" "platforms;android-36" "build-tools;36.0.0"
 
       - uses: gradle/actions/setup-gradle@v4
-
-      - name: Make Gradle wrapper executable
-        if: hashFiles('android/keyboard/gradlew') != ''
-        working-directory: android/keyboard
-        run: chmod +x ./gradlew
+        with:
+          # No wrapper JAR is committed, so put a known-compatible Gradle on
+          # PATH for the `gradle assembleDebug` fallback below.
+          gradle-version: "8.13"
 
       - name: Assemble debug APK
         working-directory: android/keyboard
-        # Fallback for repositories that do not commit the wrapper jar:
-        # if [ -f ./gradlew ]; then ./gradlew assembleDebug; else gradle assembleDebug; fi
         run: |
           if [ -f ./gradlew ]; then
             ./gradlew assembleDebug
@@ -64,46 +79,72 @@ jobs:
 
   release:
     name: Build signed release APK
-    # Only tag pushes are eligible; individual steps are additionally gated on
-    # the presence of the signing secrets below.
+    # Tag gate at job level. Secrets cannot be used in an `if:` expression, so
+    # the signing-secret gate is a job-level env var checked by each step.
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     permissions:
       contents: write
     env:
+      ANDROID_HOME: /usr/local/lib/android/sdk
+      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
       NEWPGP_KEYSTORE_BASE64: ${{ secrets.NEWPGP_KEYSTORE_BASE64 }}
       NEWPGP_KEYSTORE_PASSWORD: ${{ secrets.NEWPGP_KEYSTORE_PASSWORD }}
       NEWPGP_KEY_ALIAS: ${{ secrets.NEWPGP_KEY_ALIAS }}
       NEWPGP_KEY_PASSWORD: ${{ secrets.NEWPGP_KEY_PASSWORD }}
+      SIGNING_READY: ${{ secrets.NEWPGP_KEYSTORE_BASE64 != '' && secrets.NEWPGP_KEYSTORE_PASSWORD != '' && secrets.NEWPGP_KEY_ALIAS != '' && secrets.NEWPGP_KEY_PASSWORD != '' }}
     steps:
+      - name: Skip release when signing secrets are not configured
+        if: env.SIGNING_READY != 'true'
+        run: echo "::notice title=Signed release skipped::Signing secrets are not configured; no signed release APK will be built."
+
       - uses: actions/checkout@v4
+        if: env.SIGNING_READY == 'true'
 
       - uses: actions/setup-java@v4
+        if: env.SIGNING_READY == 'true'
         with:
           distribution: temurin
           java-version: "17"
           cache: gradle
 
-      - uses: android-actions/setup-android@v3
-
-      - name: Install Android platform 36 and build tools
+      - name: Accept licenses and install Android SDK 36
+        if: env.SIGNING_READY == 'true'
         run: |
-          yes | sdkmanager --licenses > /dev/null 2>&1 || true
-          sdkmanager "platforms;android-36" "build-tools;36.0.0"
+          set -euo pipefail
+          SDKMGR=""
+          if command -v sdkmanager >/dev/null 2>&1; then
+            SDKMGR="$(command -v sdkmanager)"
+          elif [ -x "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" ]; then
+            SDKMGR="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          else
+            SDKMGR="$(find "$ANDROID_HOME/cmdline-tools" -mindepth 3 -maxdepth 3 -type f -name sdkmanager 2>/dev/null | sort -V | tail -n 1 || true)"
+          fi
+          if [ -z "$SDKMGR" ] || [ ! -x "$SDKMGR" ]; then
+            echo "::error::sdkmanager was not found under $ANDROID_HOME/cmdline-tools"
+            exit 1
+          fi
+          echo "Using sdkmanager: $SDKMGR"
+          yes | "$SDKMGR" --licenses > /dev/null 2>&1 || true
+          "$SDKMGR" "platforms;android-36" "build-tools;36.0.0"
 
       - uses: gradle/actions/setup-gradle@v4
+        if: env.SIGNING_READY == 'true'
+        with:
+          gradle-version: "8.13"
 
       - name: Decode signing keystore
-        if: env.NEWPGP_KEYSTORE_BASE64 != '' && env.NEWPGP_KEYSTORE_PASSWORD != '' && env.NEWPGP_KEY_ALIAS != '' && env.NEWPGP_KEY_PASSWORD != ''
+        if: env.SIGNING_READY == 'true'
         working-directory: android/keyboard
         run: |
+          set -euo pipefail
           echo "$NEWPGP_KEYSTORE_BASE64" | base64 --decode > app/newpgp-release.jks
 
       - name: Assemble signed release APK
-        if: env.NEWPGP_KEYSTORE_BASE64 != '' && env.NEWPGP_KEYSTORE_PASSWORD != '' && env.NEWPGP_KEY_ALIAS != '' && env.NEWPGP_KEY_PASSWORD != ''
+        if: env.SIGNING_READY == 'true'
         working-directory: android/keyboard
-        # The build is expected to read these ORG_GRADLE_PROJECT_* properties
-        # from its signing config (or to be adapted to do so).
+        # Gradle maps ORG_GRADLE_PROJECT_* env vars to project properties;
+        # app/build.gradle.kts only uses them when all four are present.
         env:
           ORG_GRADLE_PROJECT_NEWPGP_UPLOAD_STORE_FILE: app/newpgp-release.jks
           ORG_GRADLE_PROJECT_NEWPGP_UPLOAD_STORE_PASSWORD: ${{ env.NEWPGP_KEYSTORE_PASSWORD }}
@@ -111,14 +152,13 @@ jobs:
           ORG_GRADLE_PROJECT_NEWPGP_UPLOAD_KEY_PASSWORD: ${{ env.NEWPGP_KEY_PASSWORD }}
         run: |
           if [ -f ./gradlew ]; then
-            chmod +x ./gradlew
             ./gradlew assembleRelease
           else
             gradle assembleRelease
           fi
 
       - name: Upload signed release APK
-        if: env.NEWPGP_KEYSTORE_BASE64 != '' && env.NEWPGP_KEYSTORE_PASSWORD != '' && env.NEWPGP_KEY_ALIAS != '' && env.NEWPGP_KEY_PASSWORD != ''
+        if: env.SIGNING_READY == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: newpgp-keyboard-release
@@ -126,7 +166,7 @@ jobs:
           if-no-files-found: error
 
       - name: Publish GitHub release
-        if: env.NEWPGP_KEYSTORE_BASE64 != '' && env.NEWPGP_KEYSTORE_PASSWORD != '' && env.NEWPGP_KEY_ALIAS != '' && env.NEWPGP_KEY_PASSWORD != ''
+        if: env.SIGNING_READY == 'true'
         uses: softprops/action-gh-release@v2
         with:
           files: android/keyboard/app/build/outputs/apk/release/*.apk

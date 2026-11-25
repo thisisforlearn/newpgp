@@ -4,6 +4,7 @@ description = "Local encrypted full-text search over decrypted mail"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
+authors.workspace = true
 license = "GPL-3.0-or-later"
 
 [dependencies]

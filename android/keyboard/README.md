@@ -77,6 +77,9 @@ wrapper JAR at `gradle/wrapper/gradle-wrapper.jar` (generated once with `gradle 
 if the CI workflow does not use a preinstalled Gradle distribution. AGP 8.11.1, Kotlin 2.2.0,
 `compileSdk = 36`, `minSdk = 24`.
 
+See [VERIFY_BUILD.md](VERIFY_BUILD.md) for the exact CI commands, the signing-secret gate, and
+local reproduction steps.
+
 ## Source layout
 
 - `app/src/main/java/com/newpgp/keyboard/autocorrect/` — pure Kotlin dictionary,

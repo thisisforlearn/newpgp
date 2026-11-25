@@ -4,6 +4,7 @@ description = "Command line interface and native messaging bridge for NewPGP"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
+authors.workspace = true
 license = "GPL-3.0-or-later"
 
 [[bin]]
@@ -24,7 +25,6 @@ serde.workspace = true
 serde_json.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
-thiserror.workspace = true
 hex.workspace = true
 base64.workspace = true
 tokio.workspace = true

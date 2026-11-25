@@ -131,6 +131,17 @@ Changes can be submitted by **email**, **GitHub**, or any other platform where t
 
 ---
 
+## People / credits
+
+NewPGP is led by **Vaibhav** (GitHub: [thisisforlearn](https://github.com/thisisforlearn)), the author and primary maintainer, with **sudo-linux-neko** ([@sudo-linux-neko](https://github.com/sudo-linux-neko)) as a contributor.
+
+- [AUTHORS.md](AUTHORS.md) — who wrote the project and what each person does.
+- [CONTRIBUTORS.md](CONTRIBUTORS.md) — everyone who has helped, and how to reach them.
+
+Want to be listed too? See [Contributing](#contributing) and [CONTRIBUTING.md](CONTRIBUTING.md).
+
+---
+
 ## How NewPGP finds your friends' keys
 
 You should not have to email people and beg them for a key file. NewPGP looks for public keys automatically, in this order:
@@ -176,7 +187,7 @@ NewPGP is open source and welcomes help — especially testing, documentation, a
 
 ## License
 
-*(License placeholder — to be confirmed before release.)*
+NewPGP is licensed under **GNU GPL version 3 or later (GPL-3.0-or-later)** — see [LICENSE](LICENSE) and [NOTICE.md](NOTICE.md), which explains why v3 was chosen.
 
 ---
 

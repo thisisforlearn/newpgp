@@ -4,6 +4,7 @@ description = "Friendly OpenPGP primitives: keys, messages, files and armor reco
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
+authors.workspace = true
 license = "GPL-3.0-or-later"
 
 [dependencies]
