@@ -1,0 +1,68 @@
+/* Scoped styles for the UI injected into Gmail/Outlook pages. No global
+   variables are overridden here, so the host page keeps its own theme. */
+
+.newpgp-armor,
+.newpgp-decrypted {
+  display: block;
+  margin: 10px 0;
+  padding: 12px;
+  border: 1px solid #d8deea;
+  border-radius: 10px;
+  background: #f7f9ff;
+  color: #172033;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.newpgp-armor__text,
+.newpgp-decrypted__text {
+  white-space: pre-wrap;
+  word-break: break-all;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  max-height: 260px;
+  overflow: auto;
+}
+
+.newpgp-decrypt-button {
+  margin-top: 8px;
+  border: 0;
+  border-radius: 8px;
+  padding: 7px 12px;
+  background: #4059d8;
+  color: #fff;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.newpgp-decrypt-button:disabled { opacity: 0.65; cursor: progress; }
+.newpgp-decrypted__heading { font-weight: 700; margin-bottom: 8px; }
+.newpgp-status { font-weight: 600; margin-bottom: 8px; }
+.newpgp-status--good { color: #1f7a4d; }
+.newpgp-status--warn { color: #946200; }
+.newpgp-status--bad { color: #b3261e; }
+.newpgp-hint { color: #5b667a; font-size: 13px; }
+
+.newpgp-notice {
+  margin: 8px 0;
+  padding: 8px;
+  border-radius: 8px;
+  color: #b3261e;
+  font-size: 13px;
+}
+
+@media (prefers-color-scheme: dark) {
+  .newpgp-armor,
+  .newpgp-decrypted {
+    border-color: #303a52;
+    background: #1b2336;
+    color: #eef2ff;
+  }
+  .newpgp-hint { color: #a6b0c5; }
+  .newpgp-status--good { color: #6ddba3; }
+  .newpgp-status--warn { color: #e3b341; }
+  .newpgp-status--bad { color: #ff8a80; }
+}

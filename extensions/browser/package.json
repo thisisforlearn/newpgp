@@ -1,0 +1,26 @@
+{
+  "name": "newpgp-browser-extension",
+  "version": "0.1.0",
+  "private": true,
+  "license": "GPL-3.0-or-later",
+  "author": "Vaibhav (https://github.com/thisisforlearn)",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/thisisforlearn/newpgp.git"
+  },
+  "description": "Manifest V3 browser extension for NewPGP: send both plaintext and PGP, discover keys, and decrypt in place.",
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "build": "tsc --noEmit && node scripts/build.mjs",
+    "typecheck": "tsc --noEmit",
+    "lint": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "esbuild": "^0.24.2",
+    "jsdom": "^25.0.1",
+    "typescript": "^5.7.3",
+    "vitest": "^2.1.8"
+  }
+}

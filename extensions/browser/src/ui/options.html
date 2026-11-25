@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>NewPGP options</title>
+    <link rel="stylesheet" href="ui/styles.css" />
+  </head>
+  <body class="options">
+    <main class="wide">
+      <header class="app-header">
+        <div class="brand">
+          <img src="icon.svg" alt="" width="28" height="28" />
+          <span>NewPGP options</span>
+        </div>
+        <span id="saved-status" class="pill" role="status"></span>
+      </header>
+
+      <section class="card">
+        <h1>How outgoing mail is sent</h1>
+        <label class="switch-row" for="mode-toggle">
+          <span class="switch-row__copy">
+            <strong>Send PGP only</strong>
+            <small id="mode-description"></small>
+          </span>
+          <input id="mode-toggle" type="checkbox" role="switch" />
+        </label>
+        <p class="tradeoff">
+          Send both keeps your words readable to everyone and adds an encrypted copy. PGP only sends just the
+          encrypted block — people without PGP cannot read it.
+        </p>
+      </section>
+
+      <section class="card">
+        <h2>Turn NewPGP on or off</h2>
+        <label class="switch-row" for="enabled-toggle">
+          <span class="switch-row__copy">
+            <strong>Enable on Gmail and Outlook</strong>
+            <small>When off, the extension leaves your drafts completely alone.</small>
+          </span>
+          <input id="enabled-toggle" type="checkbox" role="switch" />
+        </label>
+      </section>
+
+      <section class="card notice">
+        <h2>About draft autosave</h2>
+        <p>
+          Gmail and Outlook can autosave what you type <em>before</em> NewPGP encrypts it. That saved copy lives with
+          your webmail provider. NewPGP itself never writes message text to browser storage, but we cannot control
+          the webmail site.
+        </p>
+        <p>
+          For highly sensitive mail, use the built-in NewPGP client instead of a webmail compose window.
+        </p>
+        <label class="switch-row" for="autosave-toggle">
+          <span class="switch-row__copy">
+            <strong>I understand webmail may autosave drafts</strong>
+            <small>Acknowledge this note to dismiss future reminders.</small>
+          </span>
+          <input id="autosave-toggle" type="checkbox" role="switch" />
+        </label>
+      </section>
+
+      <section class="card">
+        <h2>The NewPGP helper</h2>
+        <p>
+          Encryption happens in the NewPGP desktop app or CLI daemon, which installs a native messaging host named
+          <code>com.newpgp.bridge</code>. Private keys stay there; the browser extension only sends text to be
+          encrypted or decrypted.
+        </p>
+        <p class="hint">
+          If the popup says “Helper not found”, install the NewPGP desktop app, make sure it is running, and reload
+          this extension.
+        </p>
+      </section>
+
+      <details class="card">
+        <summary>How it works</summary>
+        <ol>
+          <li>The content script reads your compose draft in memory only.</li>
+          <li>The background worker asks the helper to encrypt it for your recipients.</li>
+          <li>Your original text is kept and the armored block is appended (or replaces it in PGP-only mode).</li>
+          <li>Incoming blocks get a decrypt button and a signature status.</li>
+        </ol>
+      </details>
+    </main>
+
+    <script src="ui/options.js"></script>
+  </body>
+</html>

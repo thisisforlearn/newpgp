@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- DayNight parent + values/values-night colors gives system-following light/dark UI. -->
+    <style name="Theme.NewPgpKeyboard" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/suggestion_highlight</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowBackground">@color/keyboard_background</item>
+    </style>
+</resources>

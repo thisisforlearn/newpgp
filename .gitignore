@@ -1,0 +1,32 @@
+# Build output
+target/
+apps/desktop/src-tauri/target/
+fuzz/target/
+dist/
+node_modules/
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Local state / secrets — never commit keys, backups or indexes
+.newpgp/
+index-key.bin
+contacts.json
+search-index.bin
+*.asc
+*.sec
+*.pgp
+*.gpg
+*.keystore
+*.jks
+
+# Tool caches and temporary files
+.tmp/
+.npm-cache/
+.cargo-home/
+.desktop-target/
+
+*.tmp
+*.log
+.DS_Store

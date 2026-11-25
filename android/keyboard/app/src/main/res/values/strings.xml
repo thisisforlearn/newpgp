@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="ime_label">NewPGP Keyboard</string>
+    <string name="subtype_english">English</string>
+
+    <string name="key_shift">Shift</string>
+    <string name="key_backspace">Backspace</string>
+    <string name="key_enter">Enter</string>
+    <string name="key_emoji">Emoji</string>
+    <string name="key_encrypt">Encrypt with NewPGP</string>
+    <string name="key_numbers">Numbers and symbols</string>
+    <string name="key_letters">Letters</string>
+    <string name="suggestion">Suggestion: %1$s</string>
+
+    <string name="settings_title">NewPGP Keyboard settings</string>
+    <string name="settings_intro">All processing happens on this device. Typed text is never logged or uploaded.</string>
+    <string name="settings_autocorrect">Autocorrect and suggestions</string>
+    <string name="settings_autocorrect_summary">Correct typos and capitalize sentences using the built-in dictionary and your learned words.</string>
+    <string name="settings_auto_append">Auto-append encrypted block</string>
+    <string name="settings_auto_append_summary">OFF by default. Encrypt the whole field and append the armored block when you press Enter.</string>
+    <string name="settings_warning_title">Security warning</string>
+    <string name="settings_warning_body">Auto-append mode is experimental. Your plaintext may already be saved in the other app\'s draft/autosave before encryption runs. The keyboard cannot detect a real \"send\" event, so the block may be appended to an unsent message. Some apps may reject or mangle the appended text.</string>
+    <string name="settings_privacy_note">Privacy: no keystroke logging, no analytics, no network access. Only two settings and learned word counts are stored in app-private storage.</string>
+
+    <string name="danger_dialog_title">Enable experimental auto-append?</string>
+    <string name="danger_dialog_message">This mode can leak plaintext through provider draft autosave, cannot detect when a message is actually sent, and may break some apps. Recommended: leave it OFF and use the shield key to encrypt explicitly.</string>
+    <string name="danger_dialog_acknowledgement">I understand these risks and want to enable it anyway</string>
+    <string name="danger_dialog_enable">Enable anyway</string>
+
+    <string name="status_encrypted">Encrypted %1$d characters and inserted the PGP block</string>
+    <string name="status_auto_appended">Encrypted text appended (plaintext may be autosaved by the app)</string>
+    <string name="status_nothing_to_encrypt">Nothing to encrypt</string>
+    <string name="status_encryption_unavailable">Encryption unavailable: %1$s</string>
+    <string name="toast_encrypted">NewPGP: encrypted text inserted</string>
+</resources>

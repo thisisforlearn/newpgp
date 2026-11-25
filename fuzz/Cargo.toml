@@ -1,0 +1,30 @@
+[package]
+name = "newpgp-fuzz"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+newpgp-core = { path = "../crates/newpgp-core" }
+pgp = "0.21.1"
+
+[[bin]]
+name = "armor_normalize"
+path = "fuzz_targets/armor_normalize.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "message_parse"
+path = "fuzz_targets/message_parse.rs"
+test = false
+doc = false
+
+# Kept outside the main workspace: cargo-fuzz needs nightly + libFuzzer.
+[workspace]
+
+license = "GPL-3.0-or-later"

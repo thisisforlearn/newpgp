@@ -1,0 +1,20 @@
+{
+  "name": "newpgp-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "license": "GPL-3.0-or-later",
+  "author": "Vaibhav (https://github.com/thisisforlearn)",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/thisisforlearn/newpgp.git"
+  },
+  "description": "NewPGP desktop app — friendly OpenPGP for Windows, macOS and Linux",
+  "scripts": {
+    "dev": "tauri dev",
+    "build": "tauri build",
+    "tauri": "tauri"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.8.0"
+  }
+}

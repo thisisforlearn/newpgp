@@ -1,0 +1,24 @@
+[package]
+name = "newpgp-discovery"
+description = "Zero-hassle public key discovery via WKD, keys.openpgp.org, Autocrypt and invite links"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license = "GPL-3.0-or-later"
+
+[dependencies]
+newpgp-core.workspace = true
+newpgp-keyring.workspace = true
+pgp.workspace = true
+async-trait.workspace = true
+reqwest.workspace = true
+url.workspace = true
+base64.workspace = true
+sha1 = "0.10"
+tracing.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+tokio.workspace = true

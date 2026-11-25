@@ -1,0 +1,25 @@
+[package]
+name = "newpgp-desktop"
+version = "0.1.0"
+description = "NewPGP desktop application"
+edition = "2021"
+rust-version = "1.88"
+license = "GPL-3.0-or-later"
+
+# This app is built independently of the library workspace by `npm run tauri build`.
+[workspace]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+pgp = "0.21.1"
+newpgp-core = { path = "../../../crates/newpgp-core" }
+newpgp-keyring = { path = "../../../crates/newpgp-keyring" }
+newpgp-discovery = { path = "../../../crates/newpgp-discovery" }
+newpgp-backup = { path = "../../../crates/newpgp-backup" }
+newpgp-mail = { path = "../../../crates/newpgp-mail" }
+newpgp-search = { path = "../../../crates/newpgp-search" }

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <dimen name="keyboard_height">268dp</dimen>
+    <dimen name="suggestion_strip_height">48dp</dimen>
+    <dimen name="status_height">36dp</dimen>
+    <dimen name="keyboard_horizontal_padding">4dp</dimen>
+    <dimen name="key_gap">6dp</dimen>
+    <dimen name="key_vertical_gap">6dp</dimen>
+    <dimen name="key_corner_radius">8dp</dimen>
+    <dimen name="key_char_text_size">20sp</dimen>
+    <dimen name="key_function_text_size">14sp</dimen>
+    <dimen name="suggestion_text_size">16sp</dimen>
+    <dimen name="status_text_size">13sp</dimen>
+</resources>

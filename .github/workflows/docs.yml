@@ -1,0 +1,38 @@
+name: Docs
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "docs/**"
+      - "**.md"
+      - ".github/workflows/docs.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "docs/**"
+      - "**.md"
+      - ".github/workflows/docs.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  docs:
+    name: Link check and spellcheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check markdown links
+        uses: lycheeverse/lychee-action@v2
+        with:
+          args: --verbose --no-progress --exclude-loopback './**/*.md'
+          fail: true
+
+      # Spellchecking is advisory only and must never block a merge.
+      - name: Spellcheck (non-blocking)
+        continue-on-error: true
+        uses: codespell-project/actions-codespell@v2
+        with:
+          skip: ./Cargo.lock,./target,./node_modules,./.git

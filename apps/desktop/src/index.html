@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>NewPGP — private made simple</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header>
+      <div class="brand">NewPGP <span>private made simple</span></div>
+      <div id="key-status" class="status-pill">Checking your key…</div>
+    </header>
+
+    <nav class="tabs" role="tablist">
+      <button data-tab="compose" class="active">Write</button>
+      <button data-tab="keys">Keys &amp; people</button>
+      <button data-tab="decrypt">Read</button>
+      <button data-tab="about">About</button>
+    </nav>
+
+    <main>
+      <section id="tab-compose" class="tab active">
+        <div class="card">
+          <h1>Write a private message</h1>
+          <p class="muted">By default we keep your normal message and add an encrypted copy underneath. Anyone can still read it; people with PGP get the private version.</p>
+          <label>Recipients <span class="muted">(email addresses you have keys for)</span></label>
+          <input id="recipients" placeholder="alice@example.com, bob@example.com" />
+          <label>Your message</label>
+          <textarea id="body" rows="10" placeholder="Type your message here…"></textarea>
+          <div class="row">
+            <label class="radio"><input type="radio" name="mode" value="both" checked /> Normal + encrypted copy <small>recommended</small></label>
+            <label class="radio"><input type="radio" name="mode" value="pgp-only" /> Encrypted only</label>
+            <label class="radio"><input type="radio" name="mode" value="plain" /> No encryption</label>
+          </div>
+          <button id="compose-btn" class="primary">Prepare message</button>
+          <div id="compose-notices" class="notices"></div>
+          <label>Ready to send</label>
+          <textarea id="compose-output" rows="12" readonly></textarea>
+          <button id="copy-btn">Copy to clipboard</button>
+        </div>
+      </section>
+
+      <section id="tab-keys" class="tab">
+        <div class="card">
+          <h1>Your key</h1>
+          <div id="my-key"></div>
+          <details>
+            <summary>Create a new key</summary>
+            <label>Name</label><input id="new-name" placeholder="Your name" />
+            <label>Email</label><input id="new-email" placeholder="you@example.com" />
+            <label>Password <span class="muted">(optional — there is no recovery if you forget it)</span></label>
+            <input id="new-password" type="password" />
+            <button id="create-btn" class="primary">Create my key</button>
+          </details>
+        </div>
+        <div class="card">
+          <h1>People</h1>
+          <p class="muted">Keys are found automatically from email addresses when possible. No Web of Trust, no key signing parties.</p>
+          <div id="contacts">Loading…</div>
+          <h2>Add someone's key</h2>
+          <label>Their email</label><input id="import-email" placeholder="friend@example.com" />
+          <label>Their public key</label>
+          <textarea id="import-armor" rows="5" placeholder="-----BEGIN PGP PUBLIC KEY BLOCK-----"></textarea>
+          <button id="import-btn">Add key</button>
+          <h2>Compare a safety number</h2>
+          <label>Their email</label><input id="verify-email" />
+          <label>Safety number read to you by them</label><input id="verify-code" placeholder="1234 5678 …" />
+          <button id="verify-btn">Verify this key</button>
+        </div>
+      </section>
+
+      <section id="tab-decrypt" class="tab">
+        <div class="card">
+          <h1>Read an encrypted message</h1>
+          <p class="muted">Paste the whole block, including the BEGIN and END lines. Damaged quote markers are cleaned up automatically.</p>
+          <textarea id="decrypt-input" rows="12" placeholder="-----BEGIN PGP MESSAGE-----"></textarea>
+          <button id="decrypt-btn" class="primary">Decrypt</button>
+          <div id="decrypt-output"></div>
+        </div>
+      </section>
+
+      <section id="tab-about" class="tab">
+        <div class="card">
+          <h1>What NewPGP does — and doesn't do</h1>
+          <ul>
+            <li>Uses the OpenPGP standard (RFC 9580), so it works with existing PGP keys and messages.</li>
+            <li>Finds keys automatically via WKD and verified directories; you can also use invite links.</li>
+            <li>Keeps drafts encrypted to yourself, so webmail providers can't autosave your words.</li>
+            <li>Encrypts files of any type: photos, videos, documents.</li>
+            <li>Searches your decrypted mail locally — nothing is sent to a server.</li>
+          </ul>
+          <h2>Honest limitations</h2>
+          <ul>
+            <li>Email metadata (sender, recipient, subject, time) is still visible to mail servers.</li>
+            <li>Classic OpenPGP has no forward secrecy. A ratchet-based mode is planned for a later release.</li>
+            <li>Version 0.1 is not independently security-audited. Don't rely on it for life-or-death secrecy yet.</li>
+          </ul>
+          <p class="muted">NewPGP is not a new cryptographic protocol. It uses rPGP, a pure-Rust OpenPGP implementation.</p>
+        </div>
+      </section>
+    </main>
+
+    <div id="toast" role="status" aria-live="polite"></div>
+    <script src="app.js"></script>
+  </body>
+</html>

@@ -1,0 +1,17 @@
+[package]
+name = "newpgp-search"
+description = "Local encrypted full-text search over decrypted mail"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license = "GPL-3.0-or-later"
+
+[dependencies]
+newpgp-core.workspace = true
+aes-gcm.workspace = true
+rand.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

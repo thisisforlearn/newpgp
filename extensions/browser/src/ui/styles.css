@@ -1,0 +1,158 @@
+:root {
+  color-scheme: light dark;
+  --bg: #f5f7fb;
+  --card: #ffffff;
+  --ink: #172033;
+  --muted: #5b667a;
+  --line: #e2e7f0;
+  --accent: #4059d8;
+  --accent-soft: #eef1ff;
+  --good: #1f7a4d;
+  --warn: #946200;
+  --bad: #b3261e;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #111726;
+    --card: #1b2336;
+    --ink: #eef2ff;
+    --muted: #a6b0c5;
+    --line: #303a52;
+    --accent: #9fb0ff;
+    --accent-soft: #263056;
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+}
+
+.popup { width: 380px; }
+
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--line);
+  background: var(--card);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+.pill {
+  border-radius: 999px;
+  padding: 4px 10px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.pill--error { color: var(--bad); background: color-mix(in srgb, var(--bad) 12%, transparent); }
+
+main { padding: 14px; display: grid; gap: 12px; }
+main.wide { max-width: 720px; margin: 0 auto; padding: 24px 16px; }
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 16px;
+  box-shadow: 0 2px 8px rgb(20 30 60 / 5%);
+}
+
+h1 { font-size: 18px; margin: 0 0 8px; }
+h2 { font-size: 15px; margin: 0 0 8px; }
+p { margin: 8px 0; }
+.lede { color: var(--muted); margin-top: 0; }
+
+label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; }
+
+.row { display: flex; gap: 8px; }
+
+input[type="email"] {
+  flex: 1;
+  min-width: 0;
+  padding: 9px 11px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--card);
+  color: var(--ink);
+}
+
+button {
+  border: 0;
+  border-radius: 9px;
+  padding: 9px 14px;
+  background: var(--accent);
+  color: #fff;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+button:disabled { opacity: 0.65; cursor: progress; }
+button:focus-visible, input:focus-visible, summary:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+
+.switch-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  margin: 0;
+  padding: 10px 0;
+  cursor: pointer;
+}
+
+.switch-row__copy { display: grid; gap: 4px; }
+.switch-row small { color: var(--muted); font-weight: 400; }
+.switch-row input { width: 20px; height: 20px; accent-color: var(--accent); flex: none; }
+
+.tradeoff {
+  border-left: 3px solid var(--accent);
+  padding: 4px 0 4px 10px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.hint, small, .source { color: var(--muted); }
+code { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 12px; }
+
+.key-card, .notice {
+  margin-top: 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 12px;
+  background: color-mix(in srgb, var(--accent-soft) 40%, var(--card));
+}
+
+.key-card__title { font-weight: 700; margin-bottom: 8px; }
+.fingerprint { display: block; word-break: break-all; line-height: 1.7; }
+.safety-number { margin-top: 8px; font-weight: 600; }
+.notice--error { border-color: color-mix(in srgb, var(--bad) 40%, var(--line)); }
+
+details summary { cursor: pointer; font-weight: 600; }
+details ol { padding-left: 20px; }
+details li { margin: 6px 0; }
+
+footer { text-align: center; font-size: 12px; }
+a { color: var(--accent); }
+
+/* Styles for UI injected into webmail pages live in content.css so no global
+   variables leak into the host page. */

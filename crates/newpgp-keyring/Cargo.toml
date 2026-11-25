@@ -1,0 +1,20 @@
+[package]
+name = "newpgp-keyring"
+description = "Local key storage and trust-on-first-use safety numbers"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license = "GPL-3.0-or-later"
+
+[dependencies]
+newpgp-core.workspace = true
+pgp.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+hex.workspace = true
+zeroize.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

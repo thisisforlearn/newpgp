@@ -1,0 +1,58 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/newpgp-core",
+    "crates/newpgp-keyring",
+    "crates/newpgp-discovery",
+    "crates/newpgp-backup",
+    "crates/newpgp-mail",
+    "crates/newpgp-search",
+    "crates/newpgp-cli",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.88"
+license = "GPL-3.0-or-later"
+
+[workspace.dependencies]
+newpgp-core = { path = "crates/newpgp-core", version = "0.1.0" }
+newpgp-keyring = { path = "crates/newpgp-keyring", version = "0.1.0" }
+newpgp-discovery = { path = "crates/newpgp-discovery", version = "0.1.0" }
+newpgp-backup = { path = "crates/newpgp-backup", version = "0.1.0" }
+newpgp-mail = { path = "crates/newpgp-mail", version = "0.1.0" }
+newpgp-search = { path = "crates/newpgp-search", version = "0.1.0" }
+
+pgp = "0.21.1"
+async-trait = "0.1"
+rand = "0.8"
+thiserror = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+hex = "0.4"
+base64 = "0.22"
+sha2 = "0.10"
+hmac = "0.12"
+zeroize = { version = "1", features = ["zeroize_derive"] }
+argon2 = "0.5"
+aes-gcm = "0.10"
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json", "gzip"] }
+url = "2"
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "fs", "io-util"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+clap = { version = "4", features = ["derive", "env"] }
+dirs = "6"
+tempfile = "3"
+proptest = "1"
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+strip = true
+panic = "abort"
+
+[profile.dev.package."*"]
+opt-level = 2

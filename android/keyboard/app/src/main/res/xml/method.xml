@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<input-method xmlns:android="http://schemas.android.com/apk/res/android"
+    android:settingsActivity="com.newpgp.keyboard/.SettingsActivity">
+
+    <subtype
+        android:imeOptions="flagNoExtractUi"
+        android:label="@string/subtype_english"
+        android:locale="en" />
+
+</input-method>

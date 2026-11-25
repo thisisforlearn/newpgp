@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="keyboard_background">#F3F4F6</color>
+    <color name="key_background">#FFFFFF</color>
+    <color name="key_background_pressed">#D7DBE0</color>
+    <color name="key_function_background">#E2E5EA</color>
+    <color name="key_function_pressed">#C4CAD2</color>
+    <color name="key_text">#1B1B1F</color>
+    <color name="key_function_text">#3C4043</color>
+    <color name="suggestion_background">#EDEFF2</color>
+    <color name="suggestion_text">#1B1B1F</color>
+    <color name="suggestion_highlight">#2E7D5B</color>
+    <color name="encrypt_key_background">#2E7D5B</color>
+    <color name="encrypt_key_pressed">#24634A</color>
+    <color name="encrypt_key_text">#FFFFFF</color>
+    <color name="status_background">#E6F4EA</color>
+    <color name="status_text">#1B5E3C</color>
+    <color name="divider">#D0D4DA</color>
+</resources>

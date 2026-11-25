@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>NewPGP</title>
+    <link rel="stylesheet" href="ui/styles.css" />
+  </head>
+  <body class="popup">
+    <header class="app-header">
+      <div class="brand">
+        <img src="icon.svg" alt="" width="26" height="26" />
+        <span>NewPGP</span>
+      </div>
+      <span id="bridge-status" class="pill" role="status">Checking helper…</span>
+    </header>
+
+    <main>
+      <section class="card">
+        <h1>Send safely, stay readable</h1>
+        <p class="lede">
+          By default your message stays exactly as you wrote it, with an encrypted copy added underneath.
+        </p>
+        <label class="switch-row" for="mode-toggle">
+          <span class="switch-row__copy">
+            <strong>Send PGP only</strong>
+            <small id="mode-description"></small>
+          </span>
+          <input id="mode-toggle" type="checkbox" role="switch" />
+        </label>
+        <p id="mode-tradeoff" class="tradeoff"></p>
+      </section>
+
+      <section class="card">
+        <h2>Find a contact's key</h2>
+        <form id="discover-form">
+          <label for="email">Email address</label>
+          <div class="row">
+            <input
+              id="email"
+              name="email"
+              type="email"
+              autocomplete="email"
+              placeholder="friend@example.com"
+              required
+            />
+            <button type="submit">Find key</button>
+          </div>
+        </form>
+        <div id="key-result" aria-live="polite"></div>
+      </section>
+
+      <details class="card">
+        <summary>How it works</summary>
+        <ol>
+          <li>You write a normal email in Gmail or Outlook.</li>
+          <li>NewPGP asks the local NewPGP helper to encrypt a copy for your contacts' keys.</li>
+          <li>We put the encrypted block at the bottom of your message, unless you chose PGP only.</li>
+          <li>Incoming encrypted blocks get a “Decrypt with NewPGP” button.</li>
+        </ol>
+        <p class="hint">
+          Your message text is never stored by the extension. Webmail providers may still autosave drafts before
+          sending — see the options page for details.
+        </p>
+      </details>
+
+      <footer>
+        <a href="options.html" target="_blank" rel="noopener">Options & privacy notes</a>
+      </footer>
+    </main>
+
+    <script src="ui/popup.js"></script>
+  </body>
+</html>

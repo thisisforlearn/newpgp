@@ -1,0 +1,12 @@
+{
+  "name": "com.newpgp.bridge",
+  "description": "NewPGP native messaging bridge (Rust)",
+  "path": "REPLACE_WITH_ABSOLUTE_PATH_TO_newpgp_EXECUTABLE",
+  "type": "stdio",
+  "allowed_origins": [
+    "chrome-extension://REPLACE_WITH_CHROME_EXTENSION_ID/"
+  ],
+  "allowed_extensions": [
+    "REPLACE_WITH_FIREFOX_EXTENSION_ID"
+  ]
+}

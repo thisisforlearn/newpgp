@@ -1,0 +1,52 @@
+name: CLI Binaries
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: CLI (${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            target: windows
+            binary: newpgp.exe
+          - os: macos-latest
+            target: macos
+            binary: newpgp
+          - os: ubuntu-latest
+            target: linux
+            binary: newpgp
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build CLI
+        run: cargo build --release -p newpgp-cli
+
+      - name: Upload CLI binary (${{ matrix.target }})
+        uses: actions/upload-artifact@v4
+        with:
+          name: newpgp-cli-${{ matrix.target }}
+          path: target/release/${{ matrix.binary }}
+          if-no-files-found: error
+
+      - name: Publish CLI binary to GitHub release
+        if: startsWith(github.ref, 'refs/tags/v')
+        permissions:
+          contents: write
+        uses: softprops/action-gh-release@v2
+        with:
+          files: target/release/${{ matrix.binary }}
+          fail_on_unmatched_files: false

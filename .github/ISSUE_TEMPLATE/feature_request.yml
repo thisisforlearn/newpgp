@@ -1,0 +1,60 @@
+name: Feature request
+description: Suggest an idea or improvement for NewPGP
+title: "[Feature]: "
+labels: ["enhancement", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for sharing your idea!
+
+        **Please do NOT paste private keys, passphrases, or plaintext messages into this issue.**
+        Use placeholder values when describing examples.
+
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      description: "Where would you like to see this feature?"
+      options:
+        - Desktop app
+        - Browser extension
+        - Android keyboard
+        - All platforms
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve?
+      description: "Describe the use case or pain point. Is your feature request related to a problem?"
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed solution
+      description: "Describe the behavior you would like. Use placeholder values, never real keys or plaintext."
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: "Describe any workarounds or alternatives you have considered."
+
+  - type: textarea
+    id: security-context
+    attributes:
+      label: Security considerations
+      description: "Does this feature affect key handling, encryption, or data storage? If so, how?"
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional context
+      description: "Anything else that would help us understand the request."

@@ -1,0 +1,31 @@
+[package]
+name = "newpgp-cli"
+description = "Command line interface and native messaging bridge for NewPGP"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license = "GPL-3.0-or-later"
+
+[[bin]]
+name = "newpgp"
+path = "src/main.rs"
+
+[dependencies]
+newpgp-core.workspace = true
+pgp.workspace = true
+rand.workspace = true
+newpgp-keyring.workspace = true
+newpgp-discovery.workspace = true
+newpgp-backup.workspace = true
+newpgp-mail.workspace = true
+newpgp-search.workspace = true
+clap.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+thiserror.workspace = true
+hex.workspace = true
+base64.workspace = true
+tokio.workspace = true
+dirs.workspace = true

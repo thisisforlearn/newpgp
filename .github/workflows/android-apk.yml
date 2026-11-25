@@ -1,0 +1,134 @@
+name: Android APK
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+    paths:
+      - "android/keyboard/**"
+      - ".github/workflows/android-apk.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "android/keyboard/**"
+      - ".github/workflows/android-apk.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  debug:
+    name: Build debug APK
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install Android platform 36 and build tools
+        run: |
+          yes | sdkmanager --licenses > /dev/null 2>&1 || true
+          sdkmanager "platforms;android-36" "build-tools;36.0.0"
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Make Gradle wrapper executable
+        if: hashFiles('android/keyboard/gradlew') != ''
+        working-directory: android/keyboard
+        run: chmod +x ./gradlew
+
+      - name: Assemble debug APK
+        working-directory: android/keyboard
+        # Fallback for repositories that do not commit the wrapper jar:
+        # if [ -f ./gradlew ]; then ./gradlew assembleDebug; else gradle assembleDebug; fi
+        run: |
+          if [ -f ./gradlew ]; then
+            ./gradlew assembleDebug
+          else
+            gradle assembleDebug
+          fi
+
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: newpgp-keyboard-debug
+          path: android/keyboard/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+
+  release:
+    name: Build signed release APK
+    # Only tag pushes are eligible; individual steps are additionally gated on
+    # the presence of the signing secrets below.
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      NEWPGP_KEYSTORE_BASE64: ${{ secrets.NEWPGP_KEYSTORE_BASE64 }}
+      NEWPGP_KEYSTORE_PASSWORD: ${{ secrets.NEWPGP_KEYSTORE_PASSWORD }}
+      NEWPGP_KEY_ALIAS: ${{ secrets.NEWPGP_KEY_ALIAS }}
+      NEWPGP_KEY_PASSWORD: ${{ secrets.NEWPGP_KEY_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install Android platform 36 and build tools
+        run: |
+          yes | sdkmanager --licenses > /dev/null 2>&1 || true
+          sdkmanager "platforms;android-36" "build-tools;36.0.0"
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Decode signing keystore
+        if: env.NEWPGP_KEYSTORE_BASE64 != '' && env.NEWPGP_KEYSTORE_PASSWORD != '' && env.NEWPGP_KEY_ALIAS != '' && env.NEWPGP_KEY_PASSWORD != ''
+        working-directory: android/keyboard
+        run: |
+          echo "$NEWPGP_KEYSTORE_BASE64" | base64 --decode > app/newpgp-release.jks
+
+      - name: Assemble signed release APK
+        if: env.NEWPGP_KEYSTORE_BASE64 != '' && env.NEWPGP_KEYSTORE_PASSWORD != '' && env.NEWPGP_KEY_ALIAS != '' && env.NEWPGP_KEY_PASSWORD != ''
+        working-directory: android/keyboard
+        # The build is expected to read these ORG_GRADLE_PROJECT_* properties
+        # from its signing config (or to be adapted to do so).
+        env:
+          ORG_GRADLE_PROJECT_NEWPGP_UPLOAD_STORE_FILE: app/newpgp-release.jks
+          ORG_GRADLE_PROJECT_NEWPGP_UPLOAD_STORE_PASSWORD: ${{ env.NEWPGP_KEYSTORE_PASSWORD }}
+          ORG_GRADLE_PROJECT_NEWPGP_UPLOAD_KEY_ALIAS: ${{ env.NEWPGP_KEY_ALIAS }}
+          ORG_GRADLE_PROJECT_NEWPGP_UPLOAD_KEY_PASSWORD: ${{ env.NEWPGP_KEY_PASSWORD }}
+        run: |
+          if [ -f ./gradlew ]; then
+            chmod +x ./gradlew
+            ./gradlew assembleRelease
+          else
+            gradle assembleRelease
+          fi
+
+      - name: Upload signed release APK
+        if: env.NEWPGP_KEYSTORE_BASE64 != '' && env.NEWPGP_KEYSTORE_PASSWORD != '' && env.NEWPGP_KEY_ALIAS != '' && env.NEWPGP_KEY_PASSWORD != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: newpgp-keyboard-release
+          path: android/keyboard/app/build/outputs/apk/release/*.apk
+          if-no-files-found: error
+
+      - name: Publish GitHub release
+        if: env.NEWPGP_KEYSTORE_BASE64 != '' && env.NEWPGP_KEYSTORE_PASSWORD != '' && env.NEWPGP_KEY_ALIAS != '' && env.NEWPGP_KEY_PASSWORD != ''
+        uses: softprops/action-gh-release@v2
+        with:
+          files: android/keyboard/app/build/outputs/apk/release/*.apk
+          generate_release_notes: true
+          fail_on_unmatched_files: false
