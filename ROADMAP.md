@@ -69,5 +69,5 @@ Goal: a friendly, standards-compliant OpenPGP suite that a non-technical person 
 - rPGP — <https://github.com/rpgp/rpgp>
 - WKD draft — <https://datatracker.ietf.org/doc/html/draft-koch-openpgp-webkey-service>
 - keys.openpgp.org — <https://keys.openpgp.org/>
-- Autocrypt Level 1 — <https://autocrypt.org/level1.html>
+- Autocrypt Level 1 — <https://docs.autocrypt.org/level1.html>
 - Signal Double Ratchet — <https://signal.org/docs/specifications/doubleratchet/>

@@ -70,12 +70,12 @@ flow normally.
 ## Primary sources consulted
 
 - TypeScript 7: https://devblogs.microsoft.com/typescript/announcing-typescript-7-0/
-- Vitest 5 migration: https://vitest.dev/guide/migration.html
+- Vitest 5 migration: https://vitest.dev/guide/migration/
 - RustCrypto `sha2` 0.11: https://github.com/RustCrypto/hashes/blob/master/sha2/CHANGELOG.md
 - RustCrypto `digest` 0.11: https://github.com/RustCrypto/traits/blob/master/digest/CHANGELOG.md
 - rand changelog: https://github.com/rust-random/rand/blob/master/CHANGELOG.md
 - Gradle 9 upgrade guide: https://docs.gradle.org/9.0.0/userguide/upgrading_version_8.html
-- AGP releases: https://developer.android.com/build/releases/gradle-plugin
+- AGP releases: https://developer.android.com/build/releases/agp-9-5-0-release-notes
 - Kotlin 2.4: https://kotlinlang.org/docs/whatsnew24.html
 - jsdom releases: https://github.com/jsdom/jsdom/releases
 - esbuild 0.28: https://github.com/evanw/esbuild/releases/tag/v0.28.0
