@@ -33,7 +33,7 @@ We do not relicense third-party libraries. They keep their own licenses:
 - `ring` is Apache-2.0 AND ISC; both terms are compatible with GPLv3.
 
 This is not legal advice. For questions, consult the FSF licensing lab
-<https://www.fsf.org/licensing> or a lawyer.
+<https://www.gnu.org/licenses/license-list.html> or a lawyer.
 
 ## Third-party components
 

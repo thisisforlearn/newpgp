@@ -64,7 +64,7 @@ NewPGP finds public keys automatically so users do not have to hunt for them. Or
 2. **keys.openpgp.org** — <https://keys.openpgp.org/>.
    - Only keys whose email addresses have been **verified** are listed.
    - The service **strips third-party signatures**, so looking up a key does not reveal your social graph.
-3. **Autocrypt 1.1** — <https://autocrypt.org/level1.html>.
+3. **Autocrypt 1.1** — <https://docs.autocrypt.org/level1.html>.
    - In-band key distribution via email headers.
    - Maintains **peer state** per correspondent.
    - Honors `prefer-encrypt=mutual` before enabling opportunistic encryption.
@@ -134,8 +134,8 @@ This normalization is important because webmail clients frequently mangle armore
 - RFC 9580 — <https://www.rfc-editor.org/rfc/rfc9580.html>
 - WKD draft — <https://datatracker.ietf.org/doc/html/draft-koch-openpgp-webkey-service>
 - keys.openpgp.org — <https://keys.openpgp.org/>
-- Autocrypt Level 1 — <https://autocrypt.org/level1.html>
+- Autocrypt Level 1 — <https://docs.autocrypt.org/level1.html>
 - rPGP — <https://github.com/rpgp/rpgp>
-- age — <https://age-encryption.org/>
+- age — <https://github.com/FiloSottile/age>
 - Sequoia PGP — <https://sequoia-pgp.org/>
 - Signal Double Ratchet — <https://signal.org/docs/specifications/doubleratchet/>

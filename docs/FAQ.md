@@ -138,8 +138,8 @@ Yes — that is exactly why the default is to **send both** the normal message a
 - RFC 9580 — <https://www.rfc-editor.org/rfc/rfc9580.html>
 - WKD draft — <https://datatracker.ietf.org/doc/html/draft-koch-openpgp-webkey-service>
 - keys.openpgp.org — <https://keys.openpgp.org/>
-- Autocrypt Level 1 — <https://autocrypt.org/level1.html>
+- Autocrypt Level 1 — <https://docs.autocrypt.org/level1.html>
 - rPGP — <https://github.com/rpgp/rpgp>
-- age — <https://age-encryption.org/>
+- age — <https://github.com/FiloSottile/age>
 - Sequoia PGP — <https://sequoia-pgp.org/>
 - Signal Double Ratchet — <https://signal.org/docs/specifications/doubleratchet/>
