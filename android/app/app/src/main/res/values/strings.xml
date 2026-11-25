@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">NewPGP</string>
+    <string name="share_activity_label">Encrypt shared text</string>
+
+    <string name="tab_write">Write</string>
+    <string name="tab_read">Read</string>
+    <string name="tab_people">People</string>
+    <string name="tab_files">Files</string>
+
+    <string name="preview_banner_title">Preview build</string>
+    <string name="preview_banner_body">The native PGP engine is not connected in this build yet. You can explore the app, but nothing is really encrypted. No fake ciphertext will ever be sent.</string>
+
+    <string name="onboarding_title">Welcome to NewPGP</string>
+    <string name="onboarding_body">Create your key to get started. Your private key stays on this device.</string>
+    <string name="field_display_name">Your name</string>
+    <string name="field_email">Your email address</string>
+    <string name="button_create_key">Create my key</string>
+    <string name="key_ready_title">Your key is ready</string>
+    <string name="button_copy_public_key">Copy public key</string>
+    <string name="button_continue">Continue</string>
+
+    <string name="write_title">Write a private message</string>
+    <string name="field_message">Your message</string>
+    <string name="field_recipients">To (email addresses, separated by commas)</string>
+    <string name="toggle_pgp_only">PGP-only (hide the plain text)</string>
+    <string name="write_explainer">Sending both keeps things simple for friends without PGP, but the plain text is visible. PGP-only protects the message, but your friend needs to be able to decrypt it.</string>
+    <string name="button_prepare_message">Prepare message</string>
+    <string name="button_copy">Copy</string>
+    <string name="button_share">Share</string>
+    <string name="result_ready">Message ready. Choose Copy or Share.</string>
+
+    <string name="read_title">Read an encrypted message</string>
+    <string name="field_armored">Paste an encrypted message</string>
+    <string name="button_decrypt">Decrypt</string>
+    <string name="signature_verified">Signature verified</string>
+    <string name="signature_unverified">Signed, but identity not verified</string>
+    <string name="signature_none">No signature found</string>
+    <string name="signature_unknown">Signature status unknown</string>
+
+    <string name="people_title">People and keys</string>
+    <string name="field_lookup_email">Find a friend by email</string>
+    <string name="button_find_key">Find key</string>
+    <string name="button_verify">Verify safety number</string>
+    <string name="field_safety_number">Type the safety number they read to you</string>
+    <string name="button_check_number">Check number</string>
+    <string name="verified_badge">Verified</string>
+    <string name="safety_match">Numbers match. This contact is verified.</string>
+    <string name="safety_mismatch">Numbers do not match. Do not trust this contact.</string>
+
+    <string name="files_title">Files</string>
+    <string name="files_preview_body">File encryption is not available in this preview. NewPGP does not read, upload, or store your files here.</string>
+    <string name="button_share_file_soon">Share encrypted file (not available yet)</string>
+
+    <string name="share_title">Encrypt shared text</string>
+    <string name="share_body">Another app sent you text. Choose what to do with it. Nothing is encrypted until you tap a button.</string>
+    <string name="button_encrypt_and_copy">Encrypt &amp; copy</string>
+    <string name="button_encrypt_and_share">Encrypt &amp; share</string>
+    <string name="button_cancel">Cancel</string>
+    <string name="button_dismiss">OK</string>
+    <string name="share_empty">No text was shared. Return to the app that shared this and try again.</string>
+
+    <string name="busy_please_wait">Working…</string>
+    <string name="cd_copy">Copy to clipboard</string>
+    <string name="cd_app_icon">NewPGP app icon</string>
+</resources>
