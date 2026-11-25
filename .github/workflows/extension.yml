@@ -44,13 +44,16 @@ jobs:
       - name: Build
         run: npm run build
 
-      # Assumes the packaging step outputs a zip in extensions/browser/dist.
+      - name: Package extension
+        run: npm run package
+
       - name: Upload packaged extension
         uses: actions/upload-artifact@v4
         with:
           name: newpgp-browser-extension
           path: |
             extensions/browser/dist/*.zip
-            extensions/browser/dist/*.crx
             extensions/browser/dist/*.xpi
-          if-no-files-found: ignore
+            extensions/browser/*.zip
+            extensions/browser/*.xpi
+          if-no-files-found: error
