@@ -56,7 +56,7 @@ jobs:
           fi
 
       - name: Upload debug APK
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: newpgp-keyboard-debug
           path: android/keyboard/app/build/outputs/apk/debug/*.apk
@@ -119,7 +119,7 @@ jobs:
 
       - name: Upload signed release APK
         if: env.NEWPGP_KEYSTORE_BASE64 != '' && env.NEWPGP_KEYSTORE_PASSWORD != '' && env.NEWPGP_KEY_ALIAS != '' && env.NEWPGP_KEY_PASSWORD != ''
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: newpgp-keyboard-release
           path: android/keyboard/app/build/outputs/apk/release/*.apk
