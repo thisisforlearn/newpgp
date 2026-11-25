@@ -1,0 +1,40 @@
+# cargo-audit configuration.
+#
+# Format reference:
+# https://raw.githubusercontent.com/RustSec/rustsec/main/cargo-audit/audit.toml.example
+#
+# This file is read from the repository root by `cargo audit` (the `--file`
+# flag only selects the lockfile; it does not change config discovery).
+# The two ignores below are narrowly scoped to advisory IDs and are justified
+# in docs/SECURITY_AUDIT.md. Remove them when the review conditions there are
+# met; do not replace them with broad severity/target/yanked filters.
+
+[advisories]
+# Fail loudly if an ignore becomes stale (advisory no longer in the lockfile).
+warn_unused_ignores = true
+
+ignore = [
+    # RUSTSEC-2026-0387 - crypto-bigint 0.5.5: operations intended to be
+    # constant-time may branch on secret data (subtraction, zero counting,
+    # division, Montgomery multiplication, UintRef equality, invert).
+    # TRANSITIVE via rPGP (`pgp` 0.21.1, the latest release). NewPGP only uses
+    # rPGP for Ed25519 signing and X25519 encryption; the affected bigint
+    # operations are reached only by legacy RSA message/key parsing paths that
+    # NewPGP does not call. Patched in crypto-bigint >= 0.7.6, which rPGP cannot
+    # take without a semver-breaking upgrade. Re-check on every rPGP upgrade.
+    "RUSTSEC-2026-0387",
+
+    # RUSTSEC-2023-0071 (CVE-2023-49092) - rsa 0.9.10: "Marvin Attack"
+    # potential private-key recovery through timing sidechannels.
+    # TRANSITIVE via rPGP (`pgp` 0.21.1, the latest release). NewPGP performs
+    # no RSA operations: key generation and all normal flows use Ed25519
+    # signing and Curve25519/X25519 encryption. RSA is present only for legacy
+    # message/key parsing compatibility. Patched in rsa >= 0.10.0, which rPGP
+    # cannot take without a semver-breaking upgrade. Re-check on every rPGP
+    # upgrade and before adding any RSA support to NewPGP.
+    "RUSTSEC-2023-0071",
+]
+
+# Keep every informational category enabled (this is also cargo-audit's
+# default when the field is omitted). Do not silence these to hide findings.
+informational_warnings = ["unmaintained", "unsound", "notice"]

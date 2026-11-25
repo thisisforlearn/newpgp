@@ -4,6 +4,7 @@ description = "Zero-hassle public key discovery via WKD, keys.openpgp.org, Autoc
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
+authors.workspace = true
 license = "GPL-3.0-or-later"
 
 [dependencies]

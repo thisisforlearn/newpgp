@@ -8,18 +8,21 @@ use newpgp_core::keys::{
     generate_identity, parse_public_key, parse_secret_key, raw_fingerprint,
 };
 use newpgp_core::message::{decrypt_text, encrypt_text, EncryptionProfile};
-use newpgp_core::Result;
-use newpgp_keyring::{KeyRing, KeySource, TofuOutcome};
+use newpgp_keyring::{KeyRing, KeySource};
 use newpgp_mail::{compose, ComposeMode, ComposeRequest};
-use pgp::composed::SignedPublicKey;
+use pgp::composed::{ArmorOptions, SignedPublicKey, SignedSecretKey};
 use serde_json::{json, Value};
 use tauri::Manager;
+
+/// `newpgp_core::Result` is a one-parameter alias for internal crates. Tauri
+/// commands cannot use it: they must return a serializable `Result<T, String>`.
+type CoreResult<T> = std::result::Result<T, newpgp_core::Error>;
 
 fn friendly(error: newpgp_core::Error) -> String {
     error.friendly()
 }
 
-fn data_dir(app: &tauri::AppHandle) -> Result<PathBuf> {
+fn data_dir(app: &tauri::AppHandle) -> CoreResult<PathBuf> {
     app.path()
         .app_data_dir()
         .map_err(|e| newpgp_core::Error::new("app_data", "Could not find the app data folder.").with_hint(e.to_string()))
@@ -29,7 +32,7 @@ fn identity_path(dir: &PathBuf) -> PathBuf {
     dir.join("identity.asc")
 }
 
-fn load_secret(dir: &PathBuf) -> Result<pgp::composed::SignedSecretKey> {
+fn load_secret(dir: &PathBuf) -> CoreResult<SignedSecretKey> {
     let bytes = std::fs::read(identity_path(dir)).map_err(|_| {
         newpgp_core::Error::new("no_key", "You haven't created your key yet.")
             .with_hint("Open the Keys tab and create one.")
@@ -37,7 +40,7 @@ fn load_secret(dir: &PathBuf) -> Result<pgp::composed::SignedSecretKey> {
     parse_secret_key(&bytes)
 }
 
-fn keyring(dir: &PathBuf) -> Result<KeyRing> {
+fn keyring(dir: &PathBuf) -> CoreResult<KeyRing> {
     KeyRing::open(&dir.join("contacts.json"))
 }
 
@@ -66,7 +69,9 @@ fn my_key(app: tauri::AppHandle) -> Result<Value, String> {
     Ok(json!({
         "fingerprint": raw_fingerprint(&secret.primary_key),
         "prettyFingerprint": newpgp_core::keys::format_fingerprint(&secret.primary_key),
-        "publicKey": public.to_armored_string(Default::default()).map_err(|e| e.to_string())?,
+        "publicKey": public.to_armored_string(ArmorOptions::default()).map_err(|e| {
+            friendly(newpgp_core::Error::new("export", "Could not export your public key.").with_hint(e.to_string()))
+        })?,
     }))
 }
 
@@ -121,7 +126,7 @@ fn encrypt_message(app: tauri::AppHandle, plaintext: String, recipients: Vec<Str
             })?;
             contact.public_key()
         })
-        .collect::<Result<Vec<_>>>()
+        .collect::<CoreResult<Vec<_>>>()
         .map_err(friendly)?;
     let signer = (&secret, "");
     encrypt_text(

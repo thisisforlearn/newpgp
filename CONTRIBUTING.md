@@ -9,6 +9,16 @@ Official project and links: **https://github.com/thisisforlearn/newpgp**
 Vaibhav (legal name) — https://github.com/thisisforlearn
 Contact: **nekomeowpurr@proton.me**
 
+## Contributors
+
+- **thisisforlearn** — primary maintainer and project owner (the GitHub handle of
+  Vaibhav, listed above).
+- **sudo-linux-neko** (@sudo-linux-neko) — contributor.
+
+See [CONTRIBUTORS.md](CONTRIBUTORS.md) for the full list, roles and contact
+details. More platforms are coming soon; official links are at
+<https://github.com/thisisforlearn/newpgp>.
+
 ## Ways to send changes or feedback
 
 You can submit changes in any of these ways:
@@ -42,6 +52,19 @@ By submitting a change you agree that your contribution is licensed under
 **GPL-3.0-or-later**, the same license as the project (see `LICENSE` and `NOTICE.md`).
 If you cannot agree to that, email the maintainer before sending the change so
 we can discuss it.
+
+## Co-authored commits
+
+When more than one person worked on a change, credit everyone with a trailer in
+the commit message. For the two people listed in [CONTRIBUTORS.md](CONTRIBUTORS.md),
+use:
+
+```
+Co-authored-by: thisisforlearn <nekomeowpurr@proton.me>
+Co-authored-by: sudo-linux-neko
+```
+
+Add a similar `Co-authored-by:` line for anyone else who helped with the change.
 
 ## Coming soon
 

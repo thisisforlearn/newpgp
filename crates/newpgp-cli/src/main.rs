@@ -15,9 +15,7 @@ use newpgp_backup::{
 };
 use newpgp_core::armor::normalize_armor;
 use newpgp_core::files::{decrypt_file, encrypt_file};
-use newpgp_core::keys::{
-    generate_identity, parse_public_key, parse_secret_key, raw_fingerprint, Identity,
-};
+use newpgp_core::keys::{generate_identity, parse_public_key, parse_secret_key, Identity};
 use newpgp_core::message::{decrypt_bytes, encrypt_text, EncryptionProfile, SignatureStatus};
 use newpgp_core::{Error, Result};
 use newpgp_discovery::invite::Invite;
@@ -198,7 +196,7 @@ fn load_identity(home: &Path) -> Result<Identity> {
     let secret = parse_secret_key(&bytes)?;
     let public = SignedPublicKey::from(secret.clone());
     Ok(Identity {
-        fingerprint: raw_fingerprint(&secret.primary_key),
+        fingerprint: newpgp_core::keys::format_fingerprint(&secret.primary_key),
         secret,
         public,
     })
@@ -653,6 +651,9 @@ async fn handle_bridge(home: &Path, request: BridgeRequest) -> Value {
                             ),
                         };
                     let _ = ring.set_own_identity(&identity.public);
+                    // Also store it under the owner's email so `getKey` and
+                    // other contact lookups work immediately after creation.
+                    let _ = ring.learn(email, &identity.public, KeySource::Manual);
                     let _ = ring.save();
                     ok(
                         id,
@@ -852,6 +853,7 @@ async fn handle_bridge(home: &Path, request: BridgeRequest) -> Value {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use newpgp_core::keys::raw_fingerprint;
 
     #[test]
     fn recipient_resolution_accepts_armor() {

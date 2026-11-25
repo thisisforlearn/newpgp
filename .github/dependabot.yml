@@ -1,3 +1,7 @@
+# Dependabot triage rules (see docs/DEPENDABOT_TRIAGE.md).
+# Major/breaking upgrades are held back so they can be done in dedicated
+# migration PRs. Patch/minor updates on the current lines keep flowing.
+# Review and remove these rules when the migrations land (target: 2027-02-26).
 version: 2
 updates:
   - package-ecosystem: cargo
@@ -5,6 +9,26 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 10
+    ignore:
+      # RustCrypto 0.x bumps are breaking even though Dependabot calls them
+      # "minor" (e.g. digest 0.10 -> 0.11). Ignore the closed versions only.
+      - dependency-name: "sha1"
+        versions: ["0.11.0"]
+      - dependency-name: "argon2"
+        versions: ["0.6.0"]
+      - dependency-name: "aes-gcm"
+        versions: ["0.11.1"]
+      - dependency-name: "sha2"
+        versions: ["0.11.1"]
+      - dependency-name: "hmac"
+        versions: ["0.13.0"]
+      - dependency-name: "rand"
+        versions: ["0.10.4"]
+      - dependency-name: "base64"
+        versions: ["0.23.1"]
+      # dirs 6 -> 7 is a true semver major.
+      - dependency-name: "dirs"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: npm
     directory: "/apps/desktop"
@@ -17,15 +41,52 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 10
+    ignore:
+      # TypeScript 5 -> 7 is a native-port major; Vitest 2 -> 5 and
+      # jsdom 25 -> 31 are majors with toolchain/API changes.
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "vitest"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "jsdom"
+        update-types: ["version-update:semver-major"]
+      # esbuild 0.24 -> 0.28 is a breaking 0.x bump (classified as minor).
+      - dependency-name: "esbuild"
+        versions: ["0.28.2"]
 
   - package-ecosystem: github-actions
     directory: "/"
     schedule:
       interval: weekly
     open-pull-requests-limit: 10
+    ignore:
+      # Action majors can change inputs, runners and permissions.
+      - dependency-name: "actions/setup-java"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "actions/checkout"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "softprops/action-gh-release"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "gradle/actions"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "android-actions/setup-android"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "actions/setup-node"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "actions/upload-artifact"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: gradle
     directory: "/android/keyboard"
     schedule:
       interval: weekly
     open-pull-requests-limit: 10
+    ignore:
+      # AGP 8 -> 9 and Gradle 8 -> 9 require coordinated build migrations.
+      - dependency-name: "com.android.application"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "gradle-wrapper"
+        update-types: ["version-update:semver-major"]
+      # Kotlin 2.2 -> 2.4 is a 2.x minor but brings compiler/AGP changes.
+      - dependency-name: "org.jetbrains.kotlin.android"
+        versions: ["2.4.21"]
