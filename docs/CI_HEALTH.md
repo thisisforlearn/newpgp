@@ -11,9 +11,10 @@ being fixed. It is updated after each verification pass.
 
 | Workflow | Run | Failure | Fix owner | Status |
 |---|---|---|---|---|
-| Rust | 45689133123 | `cargo audit` found RUSTSEC-2026-0387 (crypto-bigint 0.5.5) and RUSTSEC-2023-0071 (rsa 0.9.10), both transitive via rPGP 0.21.1 | narrow ignores in `.cargo/audit.toml`; real `cargo audit` job | fixed locally, CI re-run pending |
-| Android APK | 45689139845 | `android-actions/setup-android@v3` runs removed `sdkmanager tools` package and crashes | use preinstalled SDK on GitHub runners, pin Gradle 8.13 | fixed locally, CI re-run pending |
-| Desktop Release | 45689139743 | 53 Rust errors in Tauri backend: `newpgp_core::Result` alias used with two generic args, Tauri commands returning a non-serializable error | command signatures to `Result<T, String>`; local `cargo check` now passes | fixed locally, CI re-run pending |
+| Rust | 45689133123 | `cargo audit` found RUSTSEC-2026-0387 (crypto-bigint 0.5.5) and RUSTSEC-2023-0071 (rsa 0.9.10), both transitive via rPGP 0.21.1 | narrow ignores in `.cargo/audit.toml`; real `cargo audit` job | config fixed; re-running |
+| Android APK | 45689139845 | `android-actions/setup-android@v3` runs removed `sdkmanager tools` package and crashes | use preinstalled SDK on GitHub runners, pin Gradle 8.13 | ✅ green (also fixed invalid IME `android:locale` resource) |
+| Desktop Release | 45689139743 | 53 Rust errors in Tauri backend: `newpgp_core::Result` alias used with two generic args, Tauri commands returning a non-serializable error | command signatures to `Result<T, String>` | ✅ green on Windows, macOS and Linux |
+| Docs | 45696646355 | lychee failed on a handshake error for fsf.org and redirect links | replaced with stable GNU docs URLs, updated redirects | ✅ green |
 | CLI Binaries | 45689139662 / 45689141547 | ✅ passed | — | done |
 | Browser Extension | 45688761966 | ✅ passed (51 tests) | — | done |
 

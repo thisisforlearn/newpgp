@@ -24,9 +24,9 @@ ignore = [
 # as warnings here so that a newly published advisory doesn't block unrelated
 # CI, but the audit job reports them prominently and release owners must review.
 vulnerability = "warn"
-unmaintained = "warn"
-unsound = "warn"
-notice = "warn"
+unmaintained = "all"
+unsound = "all"
+notice = "all"
 
 [licenses]
 version = 2
