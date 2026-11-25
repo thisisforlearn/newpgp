@@ -35,7 +35,7 @@ base64 = "0.22"
 sha2 = "0.10"
 hmac = "0.12"
 zeroize = { version = "1", features = ["zeroize_derive"] }
-argon2 = "0.5"
+argon2 = "0.6"
 aes-gcm = "0.10"
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json", "gzip"] }
 url = "2"
