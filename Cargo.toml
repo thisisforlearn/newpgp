@@ -36,7 +36,7 @@ sha2 = "0.10"
 hmac = "0.12"
 zeroize = { version = "1", features = ["zeroize_derive"] }
 argon2 = "0.5"
-aes-gcm = "0.10"
+aes-gcm = "0.11"
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json", "gzip"] }
 url = "2"
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "fs", "io-util"] }
