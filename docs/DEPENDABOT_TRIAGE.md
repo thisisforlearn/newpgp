@@ -17,6 +17,16 @@ on the current version lines.
 > bumps showed a failing `Build debug APK` check. Decisions below are based on
 > upstream breakage, not solely on the current check state. The Android APK failure
 > needs a separate investigation — it is not caused by a major-version bump.
+> Update: the Android failure was fixed in the workflow; both kept PRs were
+> rebased onto the fixed `main` and their checks re-run.
+
+### Follow-up (same day)
+
+Dependabot recreated a few of the held upgrades at nearby versions (#25–#30).
+Those were also closed, and the `ignore` rules were changed from exact versions
+to **version ranges** (`>=0.11.0`, `>=0.10.0`, etc.) so the whole held line is
+blocked instead of one release. Patch updates on the currently used lines still
+flow normally.
 
 ## Decisions
 

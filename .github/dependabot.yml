@@ -10,22 +10,22 @@ updates:
       interval: weekly
     open-pull-requests-limit: 10
     ignore:
-      # RustCrypto 0.x bumps are breaking even though Dependabot calls them
-      # "minor" (e.g. digest 0.10 -> 0.11). Ignore the closed versions only.
+      # RustCrypto/0.x bumps are breaking even though Dependabot calls some of
+      # them "minor". Hold the whole target major line until a migration lands.
       - dependency-name: "sha1"
-        versions: ["0.11.0"]
+        versions: [">=0.11.0"]
       - dependency-name: "argon2"
-        versions: ["0.6.0"]
+        versions: [">=0.6.0"]
       - dependency-name: "aes-gcm"
-        versions: ["0.11.1"]
+        versions: [">=0.11.0"]
       - dependency-name: "sha2"
-        versions: ["0.11.1"]
+        versions: [">=0.11.0"]
       - dependency-name: "hmac"
-        versions: ["0.13.0"]
+        versions: [">=0.13.0"]
       - dependency-name: "rand"
-        versions: ["0.10.4"]
+        versions: [">=0.10.0"]
       - dependency-name: "base64"
-        versions: ["0.23.1"]
+        versions: [">=0.23.0"]
       # dirs 6 -> 7 is a true semver major.
       - dependency-name: "dirs"
         update-types: ["version-update:semver-major"]
@@ -52,7 +52,7 @@ updates:
         update-types: ["version-update:semver-major"]
       # esbuild 0.24 -> 0.28 is a breaking 0.x bump (classified as minor).
       - dependency-name: "esbuild"
-        versions: ["0.28.2"]
+        versions: [">=0.28.0"]
 
   - package-ecosystem: github-actions
     directory: "/"
@@ -87,6 +87,6 @@ updates:
         update-types: ["version-update:semver-major"]
       - dependency-name: "gradle-wrapper"
         update-types: ["version-update:semver-major"]
-      # Kotlin 2.2 -> 2.4 is a 2.x minor but brings compiler/AGP changes.
+      # Kotlin 2.2 -> 2.4 brings compiler/AGP changes; hold the 2.4 line.
       - dependency-name: "org.jetbrains.kotlin.android"
-        versions: ["2.4.21"]
+        versions: [">=2.4.0"]
