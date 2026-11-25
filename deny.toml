@@ -20,13 +20,9 @@ ignore = [
     "RUSTSEC-2023-0071",
 ]
 
-# New code should not ship with known vulnerabilities. We keep vulnerabilities
-# as warnings here so that a newly published advisory doesn't block unrelated
-# CI, but the audit job reports them prominently and release owners must review.
-vulnerability = "warn"
-unmaintained = "all"
-unsound = "all"
-notice = "all"
+# cargo-deny v2 removed the severity knobs (vulnerability/unmaintained/unsound/
+# notice). All advisory categories are checked; the two known, justified ones
+# are listed in `ignore` below. See docs/SECURITY_AUDIT.md.
 
 [licenses]
 version = 2
