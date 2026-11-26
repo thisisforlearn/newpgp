@@ -149,7 +149,8 @@ class GrammarRules {
                 ch == '<' || ch == '>' || ch == '{' || ch == '}' || ch == '[' || ch == ']' ||
                 ch == '=' || ch == '~' || ch == '|' || Character.isSurrogate(ch)
             ) return true
-            val type = Character.getType(ch)
+            // Character.getType returns Int; the category constants are Byte in Kotlin.
+            val type = Character.getType(ch).toByte()
             if (type == Character.OTHER_SYMBOL || type == Character.MATH_SYMBOL ||
                 type == Character.MODIFIER_SYMBOL
             ) return true

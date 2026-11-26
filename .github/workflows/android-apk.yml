@@ -155,50 +155,86 @@ jobs:
             return 0
           }
 
+          # Every GitHub `run:` block is a fresh shell: the SDKMGR discovered by
+          # the earlier "Accept licenses..." step does NOT survive into this
+          # step, so discover it here instead of assuming a cross-step variable.
+          # Pass "quiet" for a best-effort probe that emits no ::error; the
+          # install path calls it without "quiet" and fails only if all fail.
+          find_sdkmanager() {
+            local quiet="${1:-}"
+            local sdk="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
+            local candidate
+            SDKMGR=""
+            # 1) PATH (sdkmanager is often not on PATH on hosted runners).
+            if command -v sdkmanager >/dev/null 2>&1; then
+              candidate="$(command -v sdkmanager)"
+              if [ -n "$candidate" ] && [ -x "$candidate" ]; then SDKMGR="$candidate"; fi
+            fi
+            # 2) The location actually seen in CI.
+            if [ -z "$SDKMGR" ] && [ -n "$sdk" ] && [ -x "$sdk/cmdline-tools/latest/bin/sdkmanager" ]; then
+              SDKMGR="$sdk/cmdline-tools/latest/bin/sdkmanager"
+            fi
+            # 3) Versioned cmdline-tools folders (e.g. cmdline-tools/16.0/bin).
+            if [ -z "$SDKMGR" ] && [ -n "$sdk" ] && [ -d "$sdk/cmdline-tools" ]; then
+              candidate="$(find "$sdk/cmdline-tools" -mindepth 3 -maxdepth 4 -type f -name sdkmanager 2>/dev/null | sort -V | tail -n 1 || true)"
+              if [ -n "$candidate" ] && [ -x "$candidate" ]; then SDKMGR="$candidate"; fi
+            fi
+            # 4) Legacy SDK layout.
+            if [ -z "$SDKMGR" ] && [ -n "$sdk" ] && [ -x "$sdk/tools/bin/sdkmanager" ]; then
+              SDKMGR="$sdk/tools/bin/sdkmanager"
+            fi
+            if [ -z "$SDKMGR" ]; then
+              if [ "$quiet" != "quiet" ]; then
+                echo "::error title=Android NDK::No Android NDK found and sdkmanager is unavailable - the Rust crypto bridge cannot be built. Checked PATH, ${sdk:-<unset>}/cmdline-tools/latest, versioned cmdline-tools dirs, and ${sdk:-<unset>}/tools/bin."
+              fi
+              return 1
+            fi
+            echo "Using sdkmanager: $SDKMGR"
+          }
+
           NDK=""
           SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
+          SDKMGR=""
 
-          # 1) Newest side-by-side NDK under $ANDROID_HOME/ndk.
-          if [ -n "$SDK" ] && [ -d "$SDK/ndk" ]; then
-            candidate="$(find "$SDK/ndk" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | sort -V | tail -n 1 || true)"
-            if valid_ndk "$candidate"; then NDK="$candidate"; fi
-          fi
+          # Re-runnable discovery so we can look again after installing an NDK.
+          discover_ndk() {
+            local candidate
+            NDK=""
+            # 1) Newest side-by-side NDK under $ANDROID_HOME/ndk.
+            if [ -n "$SDK" ] && [ -d "$SDK/ndk" ]; then
+              candidate="$(find "$SDK/ndk" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | sort -V | tail -n 1 || true)"
+              if valid_ndk "$candidate"; then NDK="$candidate"; return 0; fi
+            fi
+            # 2) Canonical env vars exported by the runner image.
+            for candidate in "${ANDROID_NDK_HOME:-}" "${ANDROID_NDK_ROOT:-}" \
+                             "${ANDROID_NDK:-}" "${ANDROID_NDK_LATEST_HOME:-}"; do
+              if valid_ndk "$candidate"; then NDK="$candidate"; return 0; fi
+            done
+            # 3) Legacy ndk-bundle or any other NDK-shaped dir under the SDK.
+            if [ -n "$SDK" ] && [ -d "$SDK" ]; then
+              while IFS= read -r candidate; do
+                if valid_ndk "$candidate"; then NDK="$candidate"; return 0; fi
+              done < <(find "$SDK" -maxdepth 3 -type d -name 'ndk*' 2>/dev/null | sort -V -r || true)
+            fi
+            return 1
+          }
 
-          # 2) Canonical env vars exported by the runner image.
-          for candidate in "${ANDROID_NDK_HOME:-}" "${ANDROID_NDK_ROOT:-}" \
-                           "${ANDROID_NDK:-}" "${ANDROID_NDK_LATEST_HOME:-}"; do
-            if [ -z "$NDK" ] && valid_ndk "$candidate"; then NDK="$candidate"; fi
-          done
-
-          # 3) Legacy ndk-bundle or any other NDK-shaped dir under the SDK.
-          if [ -z "$NDK" ] && [ -n "$SDK" ] && [ -d "$SDK" ]; then
-            while IFS= read -r candidate; do
-              if [ -z "$NDK" ] && valid_ndk "$candidate"; then NDK="$candidate"; fi
-            done < <(find "$SDK" -maxdepth 3 -type d -name 'ndk*' 2>/dev/null | sort -V -r || true)
-          fi
+          # Populate SDKMGR for downstream steps without failing when a
+          # preinstalled NDK makes sdkmanager unnecessary.
+          find_sdkmanager quiet || true
+          discover_ndk || true
 
           # 4) Nothing preinstalled: fetch a known-good NDK with sdkmanager.
           if [ -z "$NDK" ]; then
             echo "No preinstalled Android NDK found; installing one via sdkmanager."
-            SDKMGR=""
-            if command -v sdkmanager >/dev/null 2>&1; then
-              SDKMGR="$(command -v sdkmanager)"
-            elif [ -n "$SDK" ] && [ -x "$SDK/cmdline-tools/latest/bin/sdkmanager" ]; then
-              SDKMGR="$SDK/cmdline-tools/latest/bin/sdkmanager"
-            elif [ -n "$SDK" ]; then
-              SDKMGR="$(find "$SDK/cmdline-tools" -mindepth 3 -maxdepth 3 -type f -name sdkmanager 2>/dev/null | sort -V | tail -n 1 || true)"
-            fi
-            if [ -z "$SDKMGR" ] || [ ! -x "$SDKMGR" ]; then
-              echo "::error title=Android NDK::No Android NDK found and sdkmanager is unavailable - the Rust crypto bridge cannot be built."
-              exit 1
-            fi
+            find_sdkmanager
             yes | "$SDKMGR" --licenses > /dev/null 2>&1 || true
             for ver in 27.2.12479018 27.3.13750724 26.3.11579264; do
               echo "Installing ndk;$ver ..."
-              if "$SDKMGR" "ndk;$ver" > /dev/null 2>&1 && [ -n "$SDK" ]; then
-                candidate="$SDK/ndk/$ver"
-                if valid_ndk "$candidate"; then NDK="$candidate"; break; fi
-              fi
+              yes | "$SDKMGR" "ndk;$ver" > /dev/null 2>&1 || true
+              # Re-run discovery: the NDK may not land at $SDK/ndk/$ver.
+              discover_ndk || true
+              if [ -n "$NDK" ]; then break; fi
             done
             if [ -z "$NDK" ]; then
               echo "::error title=Android NDK::sdkmanager could not install any known Android NDK - the Rust crypto bridge cannot be built."
@@ -210,6 +246,7 @@ jobs:
           echo "Using Android NDK: $NDK"
           echo "ANDROID_NDK_HOME=$NDK" >> "$GITHUB_ENV"
           echo "ANDROID_NDK_ROOT=$NDK" >> "$GITHUB_ENV"
+          echo "SDKMGR=$SDKMGR" >> "$GITHUB_ENV"
 
       - name: Build Rust crypto bridge for Android ABIs
         run: |
@@ -243,7 +280,8 @@ jobs:
               echo "Prepared $LIBDIR/$abi/$found ($(stat -c%s "$LIBDIR/$abi/$found") bytes)"
               continue
             fi
-            STATIC="$RUST_TARGET_DIR/$triple/release/libnewpgp_mobile.a"
+            # Exact cargo target dir for this triple (same as --target-dir above).
+            STATIC="crates/newpgp-mobile/target/$triple/release/libnewpgp_mobile.a"
             if [ -s "$STATIC" ]; then
               echo "::notice title=Native bridge::No cargo-ndk cdylib in $LIBDIR/$abi, but the CMake static lib $STATIC ($(stat -c%s "$STATIC") bytes) is present - Gradle/CMake will produce the packaged libnewpgp_mobile.so."
               continue
@@ -492,50 +530,86 @@ jobs:
             return 0
           }
 
+          # Every GitHub `run:` block is a fresh shell: the SDKMGR discovered by
+          # the earlier "Accept licenses..." step does NOT survive into this
+          # step, so discover it here instead of assuming a cross-step variable.
+          # Pass "quiet" for a best-effort probe that emits no ::error; the
+          # install path calls it without "quiet" and fails only if all fail.
+          find_sdkmanager() {
+            local quiet="${1:-}"
+            local sdk="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
+            local candidate
+            SDKMGR=""
+            # 1) PATH (sdkmanager is often not on PATH on hosted runners).
+            if command -v sdkmanager >/dev/null 2>&1; then
+              candidate="$(command -v sdkmanager)"
+              if [ -n "$candidate" ] && [ -x "$candidate" ]; then SDKMGR="$candidate"; fi
+            fi
+            # 2) The location actually seen in CI.
+            if [ -z "$SDKMGR" ] && [ -n "$sdk" ] && [ -x "$sdk/cmdline-tools/latest/bin/sdkmanager" ]; then
+              SDKMGR="$sdk/cmdline-tools/latest/bin/sdkmanager"
+            fi
+            # 3) Versioned cmdline-tools folders (e.g. cmdline-tools/16.0/bin).
+            if [ -z "$SDKMGR" ] && [ -n "$sdk" ] && [ -d "$sdk/cmdline-tools" ]; then
+              candidate="$(find "$sdk/cmdline-tools" -mindepth 3 -maxdepth 4 -type f -name sdkmanager 2>/dev/null | sort -V | tail -n 1 || true)"
+              if [ -n "$candidate" ] && [ -x "$candidate" ]; then SDKMGR="$candidate"; fi
+            fi
+            # 4) Legacy SDK layout.
+            if [ -z "$SDKMGR" ] && [ -n "$sdk" ] && [ -x "$sdk/tools/bin/sdkmanager" ]; then
+              SDKMGR="$sdk/tools/bin/sdkmanager"
+            fi
+            if [ -z "$SDKMGR" ]; then
+              if [ "$quiet" != "quiet" ]; then
+                echo "::error title=Android NDK::No Android NDK found and sdkmanager is unavailable - the Rust crypto bridge cannot be built. Checked PATH, ${sdk:-<unset>}/cmdline-tools/latest, versioned cmdline-tools dirs, and ${sdk:-<unset>}/tools/bin."
+              fi
+              return 1
+            fi
+            echo "Using sdkmanager: $SDKMGR"
+          }
+
           NDK=""
           SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
+          SDKMGR=""
 
-          # 1) Newest side-by-side NDK under $ANDROID_HOME/ndk.
-          if [ -n "$SDK" ] && [ -d "$SDK/ndk" ]; then
-            candidate="$(find "$SDK/ndk" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | sort -V | tail -n 1 || true)"
-            if valid_ndk "$candidate"; then NDK="$candidate"; fi
-          fi
+          # Re-runnable discovery so we can look again after installing an NDK.
+          discover_ndk() {
+            local candidate
+            NDK=""
+            # 1) Newest side-by-side NDK under $ANDROID_HOME/ndk.
+            if [ -n "$SDK" ] && [ -d "$SDK/ndk" ]; then
+              candidate="$(find "$SDK/ndk" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | sort -V | tail -n 1 || true)"
+              if valid_ndk "$candidate"; then NDK="$candidate"; return 0; fi
+            fi
+            # 2) Canonical env vars exported by the runner image.
+            for candidate in "${ANDROID_NDK_HOME:-}" "${ANDROID_NDK_ROOT:-}" \
+                             "${ANDROID_NDK:-}" "${ANDROID_NDK_LATEST_HOME:-}"; do
+              if valid_ndk "$candidate"; then NDK="$candidate"; return 0; fi
+            done
+            # 3) Legacy ndk-bundle or any other NDK-shaped dir under the SDK.
+            if [ -n "$SDK" ] && [ -d "$SDK" ]; then
+              while IFS= read -r candidate; do
+                if valid_ndk "$candidate"; then NDK="$candidate"; return 0; fi
+              done < <(find "$SDK" -maxdepth 3 -type d -name 'ndk*' 2>/dev/null | sort -V -r || true)
+            fi
+            return 1
+          }
 
-          # 2) Canonical env vars exported by the runner image.
-          for candidate in "${ANDROID_NDK_HOME:-}" "${ANDROID_NDK_ROOT:-}" \
-                           "${ANDROID_NDK:-}" "${ANDROID_NDK_LATEST_HOME:-}"; do
-            if [ -z "$NDK" ] && valid_ndk "$candidate"; then NDK="$candidate"; fi
-          done
-
-          # 3) Legacy ndk-bundle or any other NDK-shaped dir under the SDK.
-          if [ -z "$NDK" ] && [ -n "$SDK" ] && [ -d "$SDK" ]; then
-            while IFS= read -r candidate; do
-              if [ -z "$NDK" ] && valid_ndk "$candidate"; then NDK="$candidate"; fi
-            done < <(find "$SDK" -maxdepth 3 -type d -name 'ndk*' 2>/dev/null | sort -V -r || true)
-          fi
+          # Populate SDKMGR for downstream steps without failing when a
+          # preinstalled NDK makes sdkmanager unnecessary.
+          find_sdkmanager quiet || true
+          discover_ndk || true
 
           # 4) Nothing preinstalled: fetch a known-good NDK with sdkmanager.
           if [ -z "$NDK" ]; then
             echo "No preinstalled Android NDK found; installing one via sdkmanager."
-            SDKMGR=""
-            if command -v sdkmanager >/dev/null 2>&1; then
-              SDKMGR="$(command -v sdkmanager)"
-            elif [ -n "$SDK" ] && [ -x "$SDK/cmdline-tools/latest/bin/sdkmanager" ]; then
-              SDKMGR="$SDK/cmdline-tools/latest/bin/sdkmanager"
-            elif [ -n "$SDK" ]; then
-              SDKMGR="$(find "$SDK/cmdline-tools" -mindepth 3 -maxdepth 3 -type f -name sdkmanager 2>/dev/null | sort -V | tail -n 1 || true)"
-            fi
-            if [ -z "$SDKMGR" ] || [ ! -x "$SDKMGR" ]; then
-              echo "::error title=Android NDK::No Android NDK found and sdkmanager is unavailable - the Rust crypto bridge cannot be built."
-              exit 1
-            fi
+            find_sdkmanager
             yes | "$SDKMGR" --licenses > /dev/null 2>&1 || true
             for ver in 27.2.12479018 27.3.13750724 26.3.11579264; do
               echo "Installing ndk;$ver ..."
-              if "$SDKMGR" "ndk;$ver" > /dev/null 2>&1 && [ -n "$SDK" ]; then
-                candidate="$SDK/ndk/$ver"
-                if valid_ndk "$candidate"; then NDK="$candidate"; break; fi
-              fi
+              yes | "$SDKMGR" "ndk;$ver" > /dev/null 2>&1 || true
+              # Re-run discovery: the NDK may not land at $SDK/ndk/$ver.
+              discover_ndk || true
+              if [ -n "$NDK" ]; then break; fi
             done
             if [ -z "$NDK" ]; then
               echo "::error title=Android NDK::sdkmanager could not install any known Android NDK - the Rust crypto bridge cannot be built."
@@ -547,6 +621,7 @@ jobs:
           echo "Using Android NDK: $NDK"
           echo "ANDROID_NDK_HOME=$NDK" >> "$GITHUB_ENV"
           echo "ANDROID_NDK_ROOT=$NDK" >> "$GITHUB_ENV"
+          echo "SDKMGR=$SDKMGR" >> "$GITHUB_ENV"
 
       - name: Build Rust crypto bridge for Android ABIs
         if: env.SIGNING_READY == 'true'
@@ -581,7 +656,8 @@ jobs:
               echo "Prepared $LIBDIR/$abi/$found ($(stat -c%s "$LIBDIR/$abi/$found") bytes)"
               continue
             fi
-            STATIC="$RUST_TARGET_DIR/$triple/release/libnewpgp_mobile.a"
+            # Exact cargo target dir for this triple (same as --target-dir above).
+            STATIC="crates/newpgp-mobile/target/$triple/release/libnewpgp_mobile.a"
             if [ -s "$STATIC" ]; then
               echo "::notice title=Native bridge::No cargo-ndk cdylib in $LIBDIR/$abi, but the CMake static lib $STATIC ($(stat -c%s "$STATIC") bytes) is present - Gradle/CMake will produce the packaged libnewpgp_mobile.so."
               continue
