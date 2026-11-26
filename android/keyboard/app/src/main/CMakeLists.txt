@@ -17,7 +17,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 # path is baked into this file. The fallback assumes the standard layout:
 # <repo>/android/keyboard/app/src/main/CMakeLists.txt -> <repo>/target.
 get_filename_component(NEWPGP_REPO_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../../../../.." ABSOLUTE)
-set(NEWPGP_RUST_TARGET_DIR "${NEWPGP_REPO_ROOT}/target" CACHE PATH
+set(NEWPGP_RUST_TARGET_DIR "${NEWPGP_REPO_ROOT}/crates/newpgp-mobile/target" CACHE PATH
     "Cargo target directory containing cargo-ndk static libraries")
 
 # cargo-ndk uses LLVM triples; CMake uses Android ABI names.

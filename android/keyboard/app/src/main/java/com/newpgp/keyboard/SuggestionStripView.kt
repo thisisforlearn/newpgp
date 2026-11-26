@@ -135,35 +135,33 @@ class SuggestionStripView @JvmOverloads constructor(
     }
 
     private val accessibilityProvider = object : AccessibilityNodeProvider() {
-        override fun getVirtualViewAt(x: Float, y: Float): Int {
-            if (width <= 0 || x < 0f || x > width || y < 0f || y > height) {
-                return AccessibilityNodeProvider.HOST_VIEW_ID
+        override fun createAccessibilityNodeInfo(virtualViewId: Int): AccessibilityNodeInfo? {
+            if (virtualViewId == AccessibilityNodeProvider.HOST_VIEW_ID) {
+                return AccessibilityNodeInfo.obtain(this@SuggestionStripView).apply {
+                    contentDescription = context.getString(R.string.keyboard_content_description)
+                }
             }
-            return min(SLOT_COUNT - 1, max(0, (x / (width / SLOT_COUNT.toFloat())).toInt()))
-        }
-
-        override fun getVisibleVirtualViews(virtualViewIds: MutableList<Int>) {
-            for (index in 0 until SLOT_COUNT) virtualViewIds.add(index)
-        }
-
-        override fun onPopulateNodeForVirtualView(virtualViewId: Int, node: AccessibilityNodeInfo) {
             val text = slots.at(virtualViewId)
-            node.className = "android.widget.Button"
-            node.isClickable = text.isNotEmpty()
-            node.contentDescription = context.getString(R.string.suggestion, text)
-            getLocationOnScreen(location)
+            if (text.isEmpty()) return null
             val slotWidth = width / SLOT_COUNT.toFloat()
-            node.setBoundsInScreen(
-                Rect(
-                    location[0] + (slotWidth * virtualViewId).toInt(),
-                    location[1],
-                    location[0] + (slotWidth * (virtualViewId + 1)).toInt(),
-                    location[1] + height
+            val stripHeight = height
+            return AccessibilityNodeInfo.obtain(this@SuggestionStripView, virtualViewId).apply {
+                className = "android.widget.Button"
+                isClickable = true
+                contentDescription = context.getString(R.string.suggestion, text)
+                this@SuggestionStripView.getLocationOnScreen(location)
+                setBoundsInScreen(
+                    Rect(
+                        location[0] + (slotWidth * virtualViewId).toInt(),
+                        location[1],
+                        location[0] + (slotWidth * (virtualViewId + 1)).toInt(),
+                        location[1] + stripHeight
+                    )
                 )
-            )
+            }
         }
 
-        override fun onPerformActionForVirtualView(
+        override fun performAction(
             virtualViewId: Int,
             action: Int,
             arguments: Bundle?

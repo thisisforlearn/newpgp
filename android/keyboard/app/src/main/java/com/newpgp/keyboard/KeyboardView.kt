@@ -480,32 +480,30 @@ class KeyboardView @JvmOverloads constructor(
     }
 
     private val accessibilityProvider = object : AccessibilityNodeProvider() {
-        override fun getVirtualViewAt(x: Float, y: Float): Int {
-            val key = keyAt(x, y) ?: return AccessibilityNodeProvider.HOST_VIEW_ID
-            return keys.indexOf(key)
-        }
-
-        override fun getVisibleVirtualViews(virtualViewIds: MutableList<Int>) {
-            for (index in keys.indices) virtualViewIds.add(index)
-        }
-
-        override fun onPopulateNodeForVirtualView(virtualViewId: Int, node: AccessibilityNodeInfo) {
-            val key = keys.getOrNull(virtualViewId) ?: return
-            node.className = "android.widget.Button"
-            node.isClickable = true
-            node.contentDescription = key.description
-            getLocationOnScreen(location)
-            node.setBoundsInScreen(
-                Rect(
-                    location[0] + key.x.toInt(),
-                    location[1] + key.y.toInt(),
-                    location[0] + (key.x + key.w).toInt(),
-                    location[1] + (key.y + key.h).toInt()
+        override fun createAccessibilityNodeInfo(virtualViewId: Int): AccessibilityNodeInfo? {
+            if (virtualViewId == AccessibilityNodeProvider.HOST_VIEW_ID) {
+                return AccessibilityNodeInfo.obtain(this@KeyboardView).apply {
+                    contentDescription = context.getString(R.string.keyboard_content_description)
+                }
+            }
+            val key = keys.getOrNull(virtualViewId) ?: return null
+            return AccessibilityNodeInfo.obtain(this@KeyboardView, virtualViewId).apply {
+                className = "android.widget.Button"
+                isClickable = true
+                contentDescription = key.description
+                this@KeyboardView.getLocationOnScreen(location)
+                setBoundsInScreen(
+                    Rect(
+                        location[0] + key.x.toInt(),
+                        location[1] + key.y.toInt(),
+                        location[0] + (key.x + key.w).toInt(),
+                        location[1] + (key.y + key.h).toInt()
+                    )
                 )
-            )
+            }
         }
 
-        override fun onPerformActionForVirtualView(
+        override fun performAction(
             virtualViewId: Int,
             action: Int,
             arguments: Bundle?

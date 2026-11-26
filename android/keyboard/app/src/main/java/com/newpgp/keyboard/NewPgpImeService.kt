@@ -344,10 +344,31 @@ class NewPgpImeService : InputMethodService(),
         return true
     }
 
+    /**
+     * CI bundles the model under assets/models/. Copy it into app-private
+     * filesDir/models on first use so the file-backed ToneEngine can find it.
+     */
+    private fun copyBundledModels() {
+        val dir = java.io.File(filesDir, "models")
+        if (!dir.exists() && !dir.mkdirs()) return
+        val names = assets.list("models") ?: return
+        for (name in names) {
+            val target = java.io.File(dir, name)
+            if (target.exists() && target.length() > 0) continue
+            runCatching {
+                assets.open("models/$name").use { input ->
+                    java.io.FileOutputStream(target).use { output -> input.copyTo(output) }
+                }
+            }
+        }
+    }
+
     /** Lazily created so the model directory is touched only when first needed. */
-    private fun ensureToneEngine(): ToneEngine = toneEngine ?: ToneEngine(
-        modelRoot = filesDir.absolutePath + "/models"
-    ).also { toneEngine = it }
+    private fun ensureToneEngine(): ToneEngine = toneEngine ?: run {
+        copyBundledModels()
+        ToneEngine(modelRoot = java.io.File(filesDir, "models").absolutePath)
+            .also { toneEngine = it }
+    }
 
     /** Runs a callback on the IME main thread; the rewrite callback is background. */
     private fun postOnUi(action: () -> Unit) {

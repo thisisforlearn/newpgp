@@ -81,7 +81,7 @@ class GrammarRules {
         val lower = word.lowercase(Locale.ROOT)
         if (VOWEL_SOUND_EXCEPTIONS.any { lower.startsWith(it) }) return true
         if (CONSONANT_SOUND_EXCEPTIONS.any { lower.startsWith(it) }) return false
-        return lower.firstOrNull() in charArrayOf('a', 'e', 'i', 'o', 'u')
+        return lower.firstOrNull()?.let { it in charArrayOf('a', 'e', 'i', 'o', 'u') } ?: false
     }
 
     private fun fixDuplicateWords(input: String): String =

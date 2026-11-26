@@ -73,7 +73,7 @@ android {
                 // not hardcode them here. Use abiFilters above instead.
                 arguments += listOf(
                     "-DANDROID_STL=c++_shared",
-                    "-DNEWPGP_RUST_TARGET_DIR=${newpgpRepoRoot.resolve("target").absolutePath}"
+                    "-DNEWPGP_RUST_TARGET_DIR=${newpgpRepoRoot.resolve("crates/newpgp-mobile/target").absolutePath}"
                 )
             }
         }

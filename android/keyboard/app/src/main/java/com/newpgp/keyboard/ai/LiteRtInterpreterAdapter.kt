@@ -50,7 +50,12 @@ class DefaultLiteRtInterpreterFactory : LiteRtInterpreterFactory {
         }
 
         override fun run(inputs: Map<Int, Any>, outputs: MutableMap<Int, Any>) {
-            delegate.run(inputs, outputs)
+            // Use the multi-input overload; Interpreter.run(Object, Object) would
+            // treat the whole Map as one input and fail once a model is loaded.
+            delegate.runForMultipleInputsOutputs(
+                inputs.toSortedMap().values.toTypedArray(),
+                outputs,
+            )
         }
 
         override fun close() = delegate.close()

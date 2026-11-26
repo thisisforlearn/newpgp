@@ -25,7 +25,7 @@ class ModelUnavailableException(val code: String) : Exception(code)
 
 /**
  * Where model files are read from. The default reads ordinary files; an IME can pass
- * an asset-backed implementation that copies `assets/models/*` into `filesDir` on
+ * an asset-backed implementation that copies `assets/models/` into `filesDir` on
  * first use, then delegates to the same interface. No network implementation exists.
  */
 interface ModelSource {
