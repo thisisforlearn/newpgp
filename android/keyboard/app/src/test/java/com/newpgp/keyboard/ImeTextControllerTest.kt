@@ -95,14 +95,14 @@ class ImeTextControllerTest {
     fun separatorIsPrependedBeforeTheWordNotAfterIt() {
         val ic = FakeTextEditConnection()
         val subject = controller(autocorrect = false)
-        subject.type(ic, "Hi")
+        subject.type(ic, "hi")
         subject.commitWordAndText(ic, ".")
-        assertEquals("Hi.", ic.text())
+        assertEquals("hi.", ic.text())
 
         subject.type(ic, "there")
         subject.commitWordAndText(ic, " ")
 
-        assertEquals("Hi. there ", ic.text())
+        assertEquals("hi. there ", ic.text())
         assertFalse(ic.text().contains("  "))
         assertEquals(0, ic.batchDepth)
     }
