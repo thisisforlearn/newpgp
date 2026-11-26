@@ -1,31 +1,38 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/keyboardRoot"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:background="@color/keyboard_background"
+    android:background="@color/kb_background"
     android:orientation="vertical">
 
+    <!-- Status chip: the service sets text/visibility on this TextView. -->
     <TextView
         android:id="@+id/statusText"
         android:layout_width="match_parent"
         android:layout_height="@dimen/status_height"
-        android:background="@color/status_background"
-        android:gravity="center_vertical"
+        android:layout_marginStart="12dp"
+        android:layout_marginEnd="12dp"
+        android:layout_marginTop="6dp"
+        android:background="@drawable/status_chip_background"
+        android:gravity="center"
         android:paddingStart="12dp"
         android:paddingEnd="12dp"
-        android:textColor="@color/status_text"
+        android:textColor="@color/kb_status_text"
         android:textSize="@dimen/status_text_size"
         android:visibility="gone" />
 
     <com.newpgp.keyboard.SuggestionStripView
         android:id="@+id/suggestionStrip"
         android:layout_width="match_parent"
-        android:layout_height="@dimen/suggestion_strip_height" />
+        android:layout_height="@dimen/suggestion_strip_height"
+        android:contentDescription="@string/keyboard_content_description" />
 
     <com.newpgp.keyboard.KeyboardView
         android:id="@+id/keyboardView"
         android:layout_width="match_parent"
-        android:layout_height="@dimen/keyboard_height" />
+        android:layout_height="@dimen/keyboard_height"
+        android:contentDescription="@string/keyboard_content_description" />
 
 </LinearLayout>

@@ -1,0 +1,51 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Vaibhav - https://github.com/thisisforlearn
+[package]
+name = "newpgp-mobile"
+description = "On-device OpenPGP bridge for the NewPGP Android keyboard (plain JNI)"
+version = "0.1.4"
+edition = "2021"
+rust-version = "1.88"
+license = "GPL-3.0-or-later"
+authors = ["Vaibhav (@thisisforlearn) <nekomeowpurr@proton.me>"]
+
+# This crate is intentionally its own workspace root: the top-level workspace
+# manifest is owned by another contributor. Build it with
+#   cargo check --manifest-path crates/newpgp-mobile/Cargo.toml
+# or add it to the root workspace members once that file is available.
+[workspace]
+
+[lib]
+name = "newpgp_mobile"
+# rlib      -> host `cargo check`/tests.
+# staticlib -> linked into libnewpgp_mobile.so by the Android CMake project.
+# cdylib    -> makes `cargo ndk ... build --release` emit the deterministic
+#              libnewpgp_mobile.so in every ABI directory (CI checks for it).
+crate-type = ["rlib", "staticlib", "cdylib"]
+
+[dependencies]
+newpgp-core = { path = "../newpgp-core" }
+newpgp-keyring = { path = "../newpgp-keyring" }
+pgp = "0.21.1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Optional: only compiled for the experimental `direct-jni` path described in
+# README.md. The shipped library uses plain JNI in C++ and does not need it.
+jni = { version = "0.21", optional = true }
+
+[dev-dependencies]
+tempfile = "3"
+
+[features]
+default = []
+direct-jni = ["dep:jni"]
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+# Keep exported C ABI symbols even though the archive is stripped otherwise.
+strip = "debuginfo"
+# Unwinding across the C/C++ JNI boundary is undefined behaviour.
+panic = "abort"

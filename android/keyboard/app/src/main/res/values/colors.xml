@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
 <resources>
+    <!-- Legacy palette: still used by settings/dialog layouts (values-night overrides these). -->
     <color name="keyboard_background">#F3F4F6</color>
     <color name="key_background">#FFFFFF</color>
     <color name="key_background_pressed">#D7DBE0</color>
@@ -16,4 +18,45 @@
     <color name="status_background">#E6F4EA</color>
     <color name="status_text">#1B5E3C</color>
     <color name="divider">#D0D4DA</color>
+
+    <!--
+        Keyboard palette. These names are intentionally NOT present in values-night,
+        so the Kotlin palette resolver can choose dark as the default and opt into the
+        light variants only when the system reports UI_MODE_NIGHT_NO.
+    -->
+    <color name="kb_background">#17191D</color>
+    <color name="kb_surface">#1E2025</color>
+    <color name="kb_key">#22242A</color>
+    <color name="kb_key_pressed">#343A45</color>
+    <color name="kb_function_key">#2B2E35</color>
+    <color name="kb_function_key_pressed">#3D424D</color>
+    <color name="kb_accent">#3B82F6</color>
+    <color name="kb_accent_pressed">#2F6FE0</color>
+    <color name="kb_glyph">#FFFFFF</color>
+    <color name="kb_glyph_muted">#9AA1AD</color>
+    <color name="kb_divider">#343842</color>
+    <color name="kb_suggestion_primary">#FFFFFF</color>
+    <color name="kb_suggestion_secondary">#959CA8</color>
+    <color name="kb_status_background">#1C3556</color>
+    <color name="kb_status_text">#BBD4FF</color>
+    <color name="kb_tooltip_background">#0E1013</color>
+    <color name="kb_tooltip_text">#FFFFFF</color>
+
+    <color name="kb_background_light">#F2F3F5</color>
+    <color name="kb_surface_light">#E8EAEE</color>
+    <color name="kb_key_light">#FFFFFF</color>
+    <color name="kb_key_pressed_light">#D7DBE2</color>
+    <color name="kb_function_key_light">#DDE1E7</color>
+    <color name="kb_function_key_pressed_light">#C5CBD4</color>
+    <color name="kb_accent_light">#2563EB</color>
+    <color name="kb_accent_pressed_light">#1D4FD7</color>
+    <color name="kb_glyph_light">#16181D</color>
+    <color name="kb_glyph_muted_light">#5F6672</color>
+    <color name="kb_divider_light">#CFD4DC</color>
+    <color name="kb_suggestion_primary_light">#16181D</color>
+    <color name="kb_suggestion_secondary_light">#6B7280</color>
+    <color name="kb_status_background_light">#E3EEFF</color>
+    <color name="kb_status_text_light">#1B4F98</color>
+    <color name="kb_tooltip_background_light">#FFFFFF</color>
+    <color name="kb_tooltip_text_light">#16181D</color>
 </resources>

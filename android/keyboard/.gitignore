@@ -5,3 +5,7 @@ local.properties
 *.iml
 .idea/
 .cxx/
+app/src/main/jniLibs/
+app/src/main/assets/models/*.tflite
+app/src/main/assets/models/*.tsv
+app/src/main/assets/models/manifest.json

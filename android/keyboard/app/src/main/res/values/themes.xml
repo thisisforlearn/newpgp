@@ -1,9 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
 <resources>
-    <!-- DayNight parent + values/values-night colors gives system-following light/dark UI. -->
+    <!--
+        DayNight parent keeps the system-following contract. Keyboard views resolve
+        their own palette in Kotlin (dark by default, light only for UI_MODE_NIGHT_NO),
+        so the new kb_* colors here are the shared tokens for chrome and dialogs.
+    -->
     <style name="Theme.NewPgpKeyboard" parent="Theme.Material3.DayNight.NoActionBar">
-        <item name="colorPrimary">@color/suggestion_highlight</item>
+        <item name="colorPrimary">@color/kb_accent</item>
         <item name="android:windowNoTitle">true</item>
-        <item name="android:windowBackground">@color/keyboard_background</item>
+        <item name="android:windowBackground">@color/kb_background</item>
     </style>
 </resources>

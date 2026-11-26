@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+<!-- Copyright (C) 2026 Vaibhav - https://github.com/thisisforlearn -->
+<resources>
+    <!-- Plain-language labels for the offline tone/grammar rewrite engine. -->
+    <string name="ai_fix_grammar">Fix grammar</string>
+    <string name="ai_make_professional">Make this sound professional</string>
+    <string name="ai_make_friendly">Make this sound friendly</string>
+    <string name="ai_make_concise">Make this sound concise</string>
+    <string name="ai_choose_style">Choose a writing style</string>
+    <string name="ai_model_grammar_small">Model: Grammar Small (offline)</string>
+
+    <string name="ai_style_none">Off</string>
+    <string name="ai_status_ready">Writing style is ready</string>
+    <string name="ai_status_loading">Getting the writing style ready…</string>
+    <string name="ai_status_unavailable">Writing style is not available yet</string>
+    <string name="ai_switch_model">Change writing model</string>
+    <string name="ai_privacy_note">This runs only on your phone. Nothing you type is uploaded or logged.</string>
+</resources>

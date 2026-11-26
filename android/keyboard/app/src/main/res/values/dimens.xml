@@ -1,16 +1,29 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
 <resources>
-    <dimen name="keyboard_height">268dp</dimen>
-    <dimen name="suggestion_strip_height">48dp</dimen>
-    <dimen name="status_height">36dp</dimen>
+    <!--
+        Vertical budget: 48dp toolbar + 4 x 56dp key rows + 4 x 8dp gaps = 304dp.
+        The single flat LinearLayout in input_view.xml has no nested heavy layouts.
+    -->
+    <dimen name="keyboard_height">304dp</dimen>
+    <dimen name="toolbar_height">48dp</dimen>
+    <dimen name="suggestion_strip_height">52dp</dimen>
+    <dimen name="status_height">32dp</dimen>
+
     <dimen name="keyboard_horizontal_padding">4dp</dimen>
-    <dimen name="key_gap">6dp</dimen>
-    <dimen name="key_vertical_gap">6dp</dimen>
-    <dimen name="key_corner_radius">8dp</dimen>
-    <dimen name="key_char_text_size">20sp</dimen>
+    <dimen name="key_gap">8dp</dimen>
+    <dimen name="key_vertical_gap">8dp</dimen>
+    <dimen name="toolbar_gap">4dp</dimen>
+    <dimen name="toolbar_touch_slop">8dp</dimen>
+    <dimen name="key_corner_radius">10dp</dimen>
+
+    <dimen name="key_char_text_size">22sp</dimen>
     <dimen name="key_function_text_size">14sp</dimen>
     <dimen name="suggestion_text_size">16sp</dimen>
+    <dimen name="suggestion_primary_text_size">18sp</dimen>
     <dimen name="status_text_size">13sp</dimen>
+    <dimen name="tooltip_text_size">13sp</dimen>
+    <dimen name="tooltip_padding">10dp</dimen>
 
     <!-- Beginner "how to enable" guide: large text and touch targets. -->
     <dimen name="guide_text_size">18sp</dimen>

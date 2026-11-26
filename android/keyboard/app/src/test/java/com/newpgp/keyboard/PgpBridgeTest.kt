@@ -3,6 +3,7 @@
 package com.newpgp.keyboard
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -26,18 +27,27 @@ class PgpBridgeTest {
     }
 
     @Test
-    fun nativeStubFailsClosedInsteadOfPretendingToEncrypt() {
-        val result = NativePgpBridge().encrypt("top secret")
-        assertTrue(result.isFailure)
-        assertTrue(result.exceptionOrNull() is UnsupportedOperationException)
-        assertEquals(
-            NativePgpBridge.NOT_CONNECTED_MESSAGE,
-            result.exceptionOrNull()?.message
-        )
+    fun missingPrivateEngineFailsClosedWithReinstallCopy() {
+        val bridge = NativePgpBridge(nativeAvailable = false)
+
+        assertFalse(bridge.isRealCrypto)
+        val failure = bridge.encrypt("top secret")
+        assertTrue(failure.isFailure)
+        assertTrue(failure.exceptionOrNull() is UnsupportedOperationException)
+        assertEquals(NativePgpBridge.MISSING_ENGINE_MESSAGE, failure.exceptionOrNull()?.message)
+        assertTrue(failure.exceptionOrNull()?.message!!.contains("reinstall the APK"))
     }
 
     @Test
-    fun defaultProviderIsTheHonestNativeStub() {
+    fun bridgeClaimsRealCryptoOnlyWhenLibraryLoaded() {
+        assertTrue(NativePgpBridge(nativeAvailable = true).isRealCrypto)
+        assertFalse(NativePgpBridge(nativeAvailable = false).isRealCrypto)
+        assertFalse(MockPgpBridge().isRealCrypto)
+    }
+
+    @Test
+    fun defaultProviderIsTheNativeBridge() {
+        // JVM tests have no .so; the provider still hands out the honest native bridge.
         assertTrue(PgpBridgeProvider.current is NativePgpBridge)
     }
 }

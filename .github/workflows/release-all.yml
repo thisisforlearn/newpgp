@@ -19,6 +19,12 @@
 #     triggers; softprops/action-gh-release updates the same tag idempotently.
 #   * softprops/action-gh-release was bumped v2 -> v3 because upstream states
 #     v2 is unmaintained and runs on the deprecated Node 20 runtime.
+#   * Version-agnostic on purpose: v0.1.4 (real Rust/OpenPGP crypto via JNI and
+#     the bundled local AI model) is gated exactly like every other v* tag.
+#     Rust CI plus Desktop Release, CLI Binaries and Android APK must all have a
+#     SUCCESSFUL run for the tagged SHA before anything is published. Do NOT
+#     weaken these gates for v0.1.4: a broken native build or model conversion
+#     makes the Android APK job fail, which correctly blocks the release.
 #
 # NOTE: `if-no-files-found` is an upload-artifact input; download-artifact has
 # no equivalent, so "no files found" is handled by the explicit verify step.
