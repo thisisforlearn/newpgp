@@ -254,6 +254,9 @@ private fun SetupWizard(
             }
 
             WizardStep.MAKE_KEY -> {
+                // Hoist composable reads out of click lambdas (lambdas are not
+                // @Composable contexts).
+                val projectLink = stringResource(R.string.project_link)
                 Text(
                     text = stringResource(R.string.wizard_step_make_key),
                     style = MaterialTheme.typography.titleLarge,
@@ -310,7 +313,7 @@ private fun SetupWizard(
                 Spacer(Modifier.height(8.dp))
                 LargeSecondaryButton(
                     text = stringResource(R.string.wizard_copy_project_link),
-                    onClick = { onCopy(stringResource(R.string.project_link)) },
+                    onClick = { onCopy(projectLink) },
                 )
 
                 wizardState.blockedReason?.let { reason ->
