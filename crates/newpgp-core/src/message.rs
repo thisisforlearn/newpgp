@@ -10,7 +10,7 @@ use pgp::crypto::aead::{AeadAlgorithm, ChunkSize};
 use pgp::crypto::hash::HashAlgorithm;
 use pgp::crypto::sym::SymmetricKeyAlgorithm;
 use pgp::ser::Serialize;
-use pgp::types::{CompressionAlgorithm, Password, VerifyingKey};
+use pgp::types::{CompressionAlgorithm, KeyDetails, Password, VerifyingKey};
 use rand::rngs::OsRng;
 
 use crate::armor::normalize_armor;
@@ -220,25 +220,40 @@ pub fn decrypt_bytes(
 }
 
 fn verify_signature(message: &Message<'_>, known_keys: &[SignedPublicKey]) -> SignatureStatus {
-    let mut had_signature = false;
-    let mut invalid = false;
+    // rPGP reports a failed verification for unsigned messages too, so check
+    // the packet structure first. An unsigned message is never "a signature
+    // from an unknown key".
+    if !message.is_signed() {
+        return SignatureStatus::Unsigned;
+    }
+
     for key in known_keys {
-        match message.verify(&key.primary_key as &dyn VerifyingKey) {
-            Ok(_) => {
-                return SignatureStatus::Verified(format_fingerprint(&key.primary_key));
-            }
-            Err(_) => {
-                had_signature = true;
-                invalid = true;
-            }
+        if message
+            .verify(&key.primary_key as &dyn VerifyingKey)
+            .is_ok()
+        {
+            return SignatureStatus::Verified(format_fingerprint(&key.primary_key));
         }
     }
-    if invalid && had_signature {
-        // A failed verify can also mean "not signed at all". We cannot tell
-        // without inspecting packets, so call it unverified rather than crying wolf.
-        SignatureStatus::Unverified
+
+    // Nothing verified. If a signature claims to come from a key we do know,
+    // it is a broken signature (or tampering): say so. If the issuer is someone
+    // we have no key for, the honest answer is "unknown signer".
+    let issuer_is_known = match message {
+        Message::Signed { reader, .. } => (0..reader.num_signatures())
+            .filter_map(|i| reader.signature(i))
+            .flat_map(|sig| sig.issuer_fingerprint())
+            .any(|issuer| {
+                known_keys
+                    .iter()
+                    .any(|key| key.primary_key.fingerprint().as_bytes() == issuer.as_bytes())
+            }),
+        _ => false,
+    };
+    if issuer_is_known {
+        SignatureStatus::Invalid
     } else {
-        SignatureStatus::Unsigned
+        SignatureStatus::Unverified
     }
 }
 
@@ -328,6 +343,82 @@ mod tests {
             .join("\n");
         let (plain, _) = decrypt_text(mangled.as_bytes(), &alice.secret, "", &[]).unwrap();
         assert_eq!(plain, "quoted");
+    }
+
+    #[test]
+    fn unsigned_message_is_not_reported_as_an_unknown_signature() {
+        let alice = generate_identity("Alice", "alice@example.com", "").unwrap();
+        let bob = generate_identity("Bob", "bob@example.com", "").unwrap();
+        let armored = encrypt_text(
+            "no signature here",
+            std::slice::from_ref(&bob.public),
+            None,
+            Default::default(),
+        )
+        .unwrap();
+        let (plain, status) = decrypt_text(
+            armored.as_bytes(),
+            &bob.secret,
+            "",
+            std::slice::from_ref(&alice.public),
+        )
+        .unwrap();
+        assert_eq!(plain, "no signature here");
+        assert_eq!(status, SignatureStatus::Unsigned);
+    }
+
+    #[test]
+    fn a_signer_we_have_no_key_for_is_unverified() {
+        let alice = generate_identity("Alice", "alice@example.com", "").unwrap();
+        let bob = generate_identity("Bob", "bob@example.com", "").unwrap();
+        let eve = generate_identity("Eve", "eve@example.com", "").unwrap();
+        let armored = encrypt_text(
+            "signed by Alice",
+            std::slice::from_ref(&bob.public),
+            Some((&alice.secret, "")),
+            Default::default(),
+        )
+        .unwrap();
+        let (_, status) = decrypt_text(
+            armored.as_bytes(),
+            &bob.secret,
+            "",
+            std::slice::from_ref(&eve.public),
+        )
+        .unwrap();
+        assert_eq!(status, SignatureStatus::Unverified);
+    }
+
+    #[test]
+    fn a_tampered_signature_from_a_known_signer_is_invalid() {
+        let alice = generate_identity("Alice", "alice@example.com", "").unwrap();
+        let mut builder =
+            MessageBuilder::from_bytes("msg.txt".to_string(), b"Integrity matters".to_vec());
+        builder.sign(
+            &alice.secret.primary_key,
+            Password::from(""),
+            HashAlgorithm::Sha256,
+        );
+        let clean = builder.to_vec(OsRng).unwrap();
+
+        let mut message = Message::from_bytes(Cursor::new(clean.clone())).unwrap();
+        message.as_data_vec().unwrap();
+        assert!(matches!(
+            verify_signature(&message, std::slice::from_ref(&alice.public)),
+            SignatureStatus::Verified(_)
+        ));
+
+        // Flip a byte in the final signature packet while leaving the issuer
+        // fingerprint subpacket intact.
+        let mut tampered = clean;
+        let last = tampered.len() - 1;
+        tampered[last] ^= 0x01;
+        let mut message = Message::from_bytes(Cursor::new(tampered.clone())).unwrap();
+        message.as_data_vec().unwrap();
+        assert_eq!(
+            verify_signature(&message, std::slice::from_ref(&alice.public)),
+            SignatureStatus::Invalid
+        );
     }
 
     #[test]

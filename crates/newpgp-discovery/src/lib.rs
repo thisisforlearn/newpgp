@@ -59,18 +59,44 @@ impl KeyFetcher for HttpFetcher {
                 .with_hint(format!("Check your internet connection. ({e})"))
         })?;
 
-        if !response.status().is_success() {
-            return Err(Error::new(
-                "not_found",
-                "No published key was found for that address.",
-            )
-            .with_hint("They can send you an invite link, or you can use an Autocrypt-enabled mail app."));
+        if let Some(err) = status_error(response.status().as_u16()) {
+            return Err(err);
         }
 
         response.bytes().await.map(|b| b.to_vec()).map_err(|e| {
             Error::new("network", "The key download was interrupted.").with_hint(e.to_string())
         })
     }
+}
+
+/// Translate an HTTP status into a typed error. `wkd_auth` and `network` are
+/// deliberately distinct from `not_found`: a directory that demands
+/// authentication or cannot answer is not the same as "no key published", and
+/// must not trigger a fallback search.
+fn status_error(status: u16) -> Option<Error> {
+    if (200..300).contains(&status) {
+        return None;
+    }
+    if status == 401 {
+        return Some(
+            Error::new("wkd_auth", "The key directory asked for authentication.")
+                .with_hint("Ask your mail administrator why the WKD endpoint is protected."),
+        );
+    }
+    if status == 404 || status == 410 {
+        return Some(
+            Error::new("not_found", "No published key was found for that address.").with_hint(
+                "They can send you an invite link, or you can use an Autocrypt-enabled mail app.",
+            ),
+        );
+    }
+    Some(
+        Error::new(
+            "network",
+            "The key directory could not answer that request.",
+        )
+        .with_hint(format!("The server returned HTTP {status}.")),
+    )
 }
 
 /// A key we found, and how we found it.
@@ -114,8 +140,11 @@ pub async fn discover<F: KeyFetcher>(email: &str, fetcher: &F) -> Result<Discove
         };
         match fetcher.fetch(&url).await {
             Ok(bytes) => {
-                if let Ok(cert) = parse_public_key(&bytes) {
+                if let Ok(mut cert) = parse_public_key(&bytes) {
                     if cert_has_email(&cert, email) {
+                        // WKD clients must discard every User ID other than
+                        // the one that matched the requested address.
+                        retain_matching_user_ids(&mut cert, email);
                         let fingerprint = raw_fingerprint(&cert.primary_key);
                         return Ok(Discovery {
                             cert,
@@ -138,7 +167,16 @@ pub async fn discover<F: KeyFetcher>(email: &str, fetcher: &F) -> Result<Discove
                     ));
                 }
             }
-            Err(e) => last_error = Some(e),
+            Err(e) => {
+                // A directory that needs authentication, or that we simply
+                // could not reach, is not evidence that no key exists. Falling
+                // back in that case could silently hand us a key from a less
+                // trusted source, so stop instead.
+                if e.code == "wkd_auth" || e.code == "network" {
+                    return Err(e);
+                }
+                last_error = Some(e);
+            }
         }
     }
 
@@ -160,17 +198,46 @@ pub fn keys_openpgp_url(email: &str) -> Result<String> {
     ))
 }
 
+/// Extract the address from a User ID, understanding the three shapes an
+/// OpenPGP User ID can take: `addr`, `<addr>` and `Name <addr>`.
+fn user_id_address(user_id: &str) -> Option<&str> {
+    let text = user_id.trim();
+    if text.starts_with('<') && text.ends_with('>') && text.len() >= 2 {
+        return Some(text[1..text.len() - 1].trim());
+    }
+    if text.ends_with('>') {
+        if let Some(start) = text.rfind('<') {
+            return Some(text[start + 1..text.len() - 1].trim());
+        }
+        return None;
+    }
+    if text.contains('<') || text.contains('>') {
+        return None;
+    }
+    Some(text)
+}
+
+/// Whether a User ID names exactly `email`. Substring matching is not safe:
+/// `alice@example.com.attacker.net` contains `alice@example.com` but is a
+/// different address.
+pub fn user_id_matches(user_id: &str, email: &str) -> bool {
+    user_id_address(user_id).is_some_and(|addr| addr.eq_ignore_ascii_case(email))
+}
+
 /// WKD requires the returned certificate to carry the requested User ID and
 /// clients must discard every other User ID.
 pub fn cert_has_email(cert: &SignedPublicKey, email: &str) -> bool {
-    cert.details.users.iter().any(|user| {
-        let text = String::from_utf8_lossy(user.id.id());
-        text.eq_ignore_ascii_case(email)
-            || text.eq_ignore_ascii_case(&format!("<{email}>"))
-            || text
-                .to_ascii_lowercase()
-                .contains(&email.to_ascii_lowercase())
-    })
+    cert.details
+        .users
+        .iter()
+        .any(|user| user_id_matches(&String::from_utf8_lossy(user.id.id()), email))
+}
+
+/// Drop all User IDs except the exact one the user asked for.
+fn retain_matching_user_ids(cert: &mut SignedPublicKey, email: &str) {
+    cert.details
+        .users
+        .retain(|user| user_id_matches(&String::from_utf8_lossy(user.id.id()), email));
 }
 
 /// A machine-readable description of a discovery result, for the native bridge.
@@ -254,6 +321,113 @@ mod tests {
 
         let err = discover("alice@example.com", &fetcher).await.unwrap_err();
         assert!(err.friendly().to_ascii_lowercase().contains("address"));
+    }
+
+    #[tokio::test]
+    async fn a_lookalike_user_id_is_rejected() {
+        let attacker = generate_identity("Alice", "alice@example.com.attacker.net", "").unwrap();
+        let url = wkd::advanced_url("alice", "example.com").unwrap();
+        let mut responses = std::collections::HashMap::new();
+        responses.insert(url, attacker.public_armor().unwrap().into_bytes());
+        let fetcher = MockFetcher { responses };
+
+        // Even though the attacker's address contains the requested one, the
+        // certificate must never be returned for alice@example.com.
+        assert!(discover("alice@example.com", &fetcher).await.is_err());
+    }
+
+    #[test]
+    fn unrelated_user_ids_are_dropped_from_the_result() {
+        let alice = generate_identity("Alice", "alice@example.com", "").unwrap();
+        let attacker = generate_identity("Alice", "alice@example.com.attacker.net", "").unwrap();
+        let mut cert = alice.public.clone();
+        cert.details
+            .users
+            .push(attacker.public.details.users[0].clone());
+        assert_eq!(cert.details.users.len(), 2);
+
+        retain_matching_user_ids(&mut cert, "alice@example.com");
+        assert_eq!(cert.details.users.len(), 1);
+        assert!(user_id_matches(
+            &String::from_utf8_lossy(cert.details.users[0].id.id()),
+            "alice@example.com"
+        ));
+    }
+
+    #[test]
+    fn user_id_matching_is_exact_and_bracket_aware() {
+        assert!(user_id_matches(
+            "Alice <alice@example.com>",
+            "alice@example.com"
+        ));
+        assert!(user_id_matches("<ALICE@example.com>", "alice@example.com"));
+        assert!(user_id_matches("alice@example.com", "alice@example.com"));
+        assert!(!user_id_matches(
+            "Alice <alice@example.com.attacker.net>",
+            "alice@example.com"
+        ));
+        assert!(!user_id_matches(
+            "notalice@example.com",
+            "alice@example.com"
+        ));
+    }
+
+    #[test]
+    fn http_statuses_are_not_all_treated_as_not_found() {
+        assert!(status_error(200).is_none());
+        assert_eq!(status_error(401).unwrap().code, "wkd_auth");
+        assert_eq!(status_error(404).unwrap().code, "not_found");
+        assert_eq!(status_error(500).unwrap().code, "network");
+    }
+
+    #[tokio::test]
+    async fn authentication_failure_does_not_fall_back() {
+        let alice = generate_identity("Alice", "alice@example.com", "").unwrap();
+        struct AuthFetcher {
+            armor: Vec<u8>,
+        }
+        #[async_trait::async_trait]
+        impl KeyFetcher for AuthFetcher {
+            async fn fetch(&self, url: &str) -> Result<Vec<u8>> {
+                if url.contains("openpgpkey.") {
+                    Err(Error::new("wkd_auth", "Authentication required."))
+                } else if url.starts_with("https://keys.openpgp.org/") {
+                    Ok(self.armor.clone())
+                } else {
+                    Err(Error::new("not_found", "No key at this address."))
+                }
+            }
+        }
+        let fetcher = AuthFetcher {
+            armor: alice.public_armor().unwrap().into_bytes(),
+        };
+        let err = discover("alice@example.com", &fetcher).await.unwrap_err();
+        assert_eq!(err.code, "wkd_auth");
+    }
+
+    #[tokio::test]
+    async fn network_failure_does_not_fall_back() {
+        let alice = generate_identity("Alice", "alice@example.com", "").unwrap();
+        struct NetworkFetcher {
+            armor: Vec<u8>,
+        }
+        #[async_trait::async_trait]
+        impl KeyFetcher for NetworkFetcher {
+            async fn fetch(&self, url: &str) -> Result<Vec<u8>> {
+                if url.contains("openpgpkey.") {
+                    Err(Error::new("network", "Server did not answer."))
+                } else if url.starts_with("https://keys.openpgp.org/") {
+                    Ok(self.armor.clone())
+                } else {
+                    Err(Error::new("not_found", "No key at this address."))
+                }
+            }
+        }
+        let fetcher = NetworkFetcher {
+            armor: alice.public_armor().unwrap().into_bytes(),
+        };
+        let err = discover("alice@example.com", &fetcher).await.unwrap_err();
+        assert_eq!(err.code, "network");
     }
 
     #[test]

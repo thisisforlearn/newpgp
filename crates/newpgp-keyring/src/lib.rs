@@ -7,6 +7,7 @@
 //! confirm a short safety number out of band when they care.
 
 use std::collections::BTreeMap;
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -111,6 +112,11 @@ pub enum TofuOutcome {
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 struct Store {
     contacts: BTreeMap<String, Contact>,
+    /// A key that replaced a trusted key but has not been confirmed yet.
+    /// Kept separate from `contacts` so an unattended save can never promote
+    /// a possible attacker key to the trusted one.
+    #[serde(default)]
+    pending_changes: BTreeMap<String, Contact>,
 }
 
 /// A small JSON-backed keyring. Safe to keep in the user's app-data folder.
@@ -141,32 +147,30 @@ impl KeyRing {
         })
     }
 
-    /// Persist atomically: write a temporary file, then rename it into place.
+    /// Persist atomically: write a uniquely named temporary file, then replace
+    /// the original with it. `NamedTempFile::persist` uses an atomic replace on
+    /// Windows, so the keyring is never briefly missing during a save.
     pub fn save(&self) -> Result<()> {
-        if let Some(parent) = self.path.parent() {
-            std::fs::create_dir_all(parent).map_err(|e| {
-                Error::new("keyring_dir", "Could not create the keyring folder.")
-                    .with_hint(e.to_string())
-            })?;
-        }
+        let parent = self
+            .path
+            .parent()
+            .filter(|p| !p.as_os_str().is_empty())
+            .unwrap_or_else(|| Path::new("."));
+        std::fs::create_dir_all(parent).map_err(|e| {
+            Error::new("keyring_dir", "Could not create the keyring folder.")
+                .with_hint(e.to_string())
+        })?;
         let bytes = serde_json::to_vec_pretty(&self.store)
             .map_err(|_| Error::new("keyring_write", "Could not serialize the keyring."))?;
-        let tmp = self.path.with_extension("tmp");
-        std::fs::write(&tmp, &bytes).map_err(|e| {
+        let mut tmp = tempfile::NamedTempFile::new_in(parent).map_err(|e| {
             Error::new("keyring_write", "Could not save your contact keyring.")
                 .with_hint(e.to_string())
         })?;
-        #[cfg(windows)]
-        {
-            // Windows cannot rename over an existing file.
-            if self.path.exists() {
-                std::fs::remove_file(&self.path).map_err(|e| {
-                    Error::new("keyring_write", "Could not replace the keyring file.")
-                        .with_hint(e.to_string())
-                })?;
-            }
-        }
-        std::fs::rename(&tmp, &self.path).map_err(|e| {
+        tmp.write_all(&bytes).map_err(|e| {
+            Error::new("keyring_write", "Could not save your contact keyring.")
+                .with_hint(e.to_string())
+        })?;
+        tmp.persist(&self.path).map_err(|e| {
             Error::new("keyring_write", "Could not finalize the keyring save.")
                 .with_hint(e.to_string())
         })?;
@@ -210,9 +214,11 @@ impl KeyRing {
                     last_seen: now(),
                     verification: Verification::TrustOnFirstUse,
                 };
-                // Verification never carries over to a different key. The UI
-                // must ask the user to compare a fresh safety number.
-                self.store.contacts.insert(email, current.clone());
+                // Verification never carries over to a different key, and the
+                // replacement is NOT trusted until the user confirms a fresh
+                // safety number. Keep the old key as the active contact and
+                // park the new one in `pending_changes`.
+                self.store.pending_changes.insert(email, current.clone());
                 Ok(TofuOutcome::KeyChanged { previous, current })
             }
         } else {
@@ -296,6 +302,17 @@ impl KeyRing {
         let public_armor = cert.to_armored_string(Default::default()).map_err(|e| {
             Error::new("key_export", "Could not store your key.").with_hint(e.to_string())
         })?;
+        // Safety numbers are two-sided: rotating our own identity changes every
+        // one of them. Any safety number verified against the old identity is
+        // no longer meaningful and must be re-compared out of band.
+        let rotated = self
+            .own_identity()
+            .is_some_and(|old| old.fingerprint != fingerprint);
+        if rotated {
+            for contact in self.store.contacts.values_mut() {
+                contact.verification = Verification::TrustOnFirstUse;
+            }
+        }
         self.store.contacts.insert(
             String::new(),
             Contact {
@@ -308,6 +325,43 @@ impl KeyRing {
                 verification: Verification::TrustOnFirstUse,
             },
         );
+        Ok(())
+    }
+
+    /// Our own identity, stored under the empty canonical address.
+    pub fn own_identity(&self) -> Option<&Contact> {
+        self.store.contacts.get("")
+    }
+
+    /// An unconfirmed replacement key, if the user has been warned about one.
+    pub fn pending_change(&self, email: &str) -> Option<&Contact> {
+        self.store
+            .pending_changes
+            .get(&Self::canonical_email(email))
+    }
+
+    /// Accept an unconfirmed key change, making it the trusted contact.
+    pub fn confirm_change(&mut self, email: &str) -> Result<()> {
+        let email = Self::canonical_email(email);
+        let current = self.store.pending_changes.remove(&email).ok_or_else(|| {
+            Error::new(
+                "no_pending_change",
+                "There is no unconfirmed key change for that address.",
+            )
+        })?;
+        self.store.contacts.insert(email, current);
+        Ok(())
+    }
+
+    /// Reject an unconfirmed key change, keeping the previously trusted key.
+    pub fn reject_change(&mut self, email: &str) -> Result<()> {
+        let email = Self::canonical_email(email);
+        if self.store.pending_changes.remove(&email).is_none() {
+            return Err(Error::new(
+                "no_pending_change",
+                "There is no unconfirmed key change for that address.",
+            ));
+        }
         Ok(())
     }
 
@@ -417,6 +471,104 @@ mod tests {
                 );
             }
             other => panic!("expected KeyChanged, got {other:?}"),
+        }
+        // The new key must not become trusted just because it was seen.
+        assert_eq!(
+            ring.get("bob@example.com").unwrap().fingerprint,
+            raw_fingerprint(&first.public.primary_key)
+        );
+        let pending = ring.pending_change("BOB@EXAMPLE.COM").unwrap();
+        assert_eq!(
+            pending.fingerprint,
+            raw_fingerprint(&second.public.primary_key)
+        );
+        assert_eq!(pending.email, "bob@example.com");
+    }
+
+    #[test]
+    fn confirming_a_change_promotes_the_pending_key() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("k.json");
+        let first = identity("bob@example.com");
+        let second = identity("bob@example.com");
+        {
+            let mut ring = KeyRing::open(&path).unwrap();
+            ring.learn("bob@example.com", &first.public, KeySource::Autocrypt)
+                .unwrap();
+            ring.learn("bob@example.com", &second.public, KeySource::Autocrypt)
+                .unwrap();
+            assert_eq!(
+                ring.get("bob@example.com").unwrap().fingerprint,
+                raw_fingerprint(&first.public.primary_key)
+            );
+            ring.confirm_change("bob@example.com").unwrap();
+            ring.save().unwrap();
+        }
+        let mut ring = KeyRing::open(&path).unwrap();
+        assert_eq!(
+            ring.get("bob@example.com").unwrap().fingerprint,
+            raw_fingerprint(&second.public.primary_key)
+        );
+        assert!(ring.pending_change("bob@example.com").is_none());
+        assert!(ring.confirm_change("bob@example.com").is_err());
+    }
+
+    #[test]
+    fn rejecting_a_change_keeps_the_old_key() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("k.json");
+        let first = identity("bob@example.com");
+        let second = identity("bob@example.com");
+        {
+            let mut ring = KeyRing::open(&path).unwrap();
+            ring.learn("bob@example.com", &first.public, KeySource::Autocrypt)
+                .unwrap();
+            ring.learn("bob@example.com", &second.public, KeySource::Autocrypt)
+                .unwrap();
+            ring.reject_change("bob@example.com").unwrap();
+            assert!(ring.pending_change("bob@example.com").is_none());
+            ring.save().unwrap();
+        }
+        let mut ring = KeyRing::open(&path).unwrap();
+        assert_eq!(
+            ring.get("bob@example.com").unwrap().fingerprint,
+            raw_fingerprint(&first.public.primary_key)
+        );
+        assert!(ring.reject_change("bob@example.com").is_err());
+    }
+
+    #[test]
+    fn rotating_our_identity_resets_every_verification() {
+        let dir = tempdir().unwrap();
+        let mut ring = KeyRing::open(&dir.path().join("k.json")).unwrap();
+        let old_me = identity("me@example.com");
+        let new_me = identity("me@example.com");
+        let alice = identity("alice@example.com");
+        let bob = identity("bob@example.com");
+        ring.set_own_identity(&old_me.public).unwrap();
+        ring.learn("alice@example.com", &alice.public, KeySource::Manual)
+            .unwrap();
+        ring.learn("bob@example.com", &bob.public, KeySource::Manual)
+            .unwrap();
+        for email in ["alice@example.com", "bob@example.com"] {
+            let code = ring.safety_number_for(email).unwrap();
+            ring.verify(email, &code).unwrap();
+            assert!(matches!(
+                ring.get(email).unwrap().verification,
+                Verification::VerifiedBySafetyNumber { .. }
+            ));
+        }
+
+        ring.set_own_identity(&new_me.public).unwrap();
+        assert_eq!(
+            ring.own_identity().unwrap().fingerprint,
+            raw_fingerprint(&new_me.public.primary_key)
+        );
+        for email in ["alice@example.com", "bob@example.com"] {
+            assert_eq!(
+                ring.get(email).unwrap().verification,
+                Verification::TrustOnFirstUse
+            );
         }
     }
 

@@ -137,6 +137,11 @@ fn normalize_block(block: &ArmorBlock) -> Result<String> {
 
     for raw in flat.lines() {
         let mut line = strip_wrapper(raw);
+        // Quoted-printable `=3D` means `=`, but a 5-character armor CRC line
+        // (`=xxxx`) may legitimately begin with `=3D`. Never rewrite that line.
+        if !is_crc_line(&line) {
+            line = line.replace("=3D", "=");
+        }
         let upper = line.to_ascii_uppercase();
 
         if upper.starts_with("-----BEGIN PGP ") {
@@ -201,10 +206,9 @@ fn strip_wrapper(raw: &str) -> String {
     if s.starts_with('<') && s.ends_with('>') && !s.contains("-----") {
         return String::new();
     }
-    // Quoted-printable and smart punctuation. One character mapping avoids
-    // repeated allocation-heavy replace passes.
-    s.replace("=3D", "=")
-        .chars()
+    // Smart punctuation only. Quoted-printable decoding happens in
+    // `normalize_block`, where we can protect legitimate CRC lines.
+    s.chars()
         .map(|c| match c {
             '’' | '‘' => '\'',
             '“' | '”' => '"',
@@ -214,6 +218,16 @@ fn strip_wrapper(raw: &str) -> String {
         .collect::<String>()
         .trim_end()
         .to_string()
+}
+
+/// An OpenPGP armor checksum line: `=` followed by four base64 characters.
+fn is_crc_line(line: &str) -> bool {
+    let bytes = line.as_bytes();
+    bytes.len() == 5
+        && bytes[0] == b'='
+        && bytes[1..]
+            .iter()
+            .all(|b| b.is_ascii_alphanumeric() || *b == b'+' || *b == b'/')
 }
 
 fn looks_like_base64(line: &str) -> bool {
@@ -285,6 +299,32 @@ mod tests {
             .join("\n");
         let normalized = normalize_armor(&pasted).unwrap();
         assert!(normalized.contains("=abcd"));
+    }
+
+    #[test]
+    fn a_real_crc_line_starting_with_3d_is_preserved() {
+        let block =
+            "-----BEGIN PGP MESSAGE-----\n\nhQEOA1Zvb25kYXJl\n=3Dab\n-----END PGP MESSAGE-----";
+        let normalized = normalize_armor(block).unwrap();
+        assert!(normalized.contains("\n=3Dab\n"));
+    }
+
+    #[test]
+    fn quoted_printable_crc_is_still_decoded() {
+        let pasted = BLOCK
+            .lines()
+            .map(|line| {
+                if line.starts_with("-----") || line.is_empty() {
+                    line.to_string()
+                } else {
+                    // The CRC `=abcd` becomes `=3Dabcd` in quoted-printable.
+                    line.replace('=', "=3D")
+                }
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        let normalized = normalize_armor(&pasted).unwrap();
+        assert!(normalized.contains("\n=abcd\n"));
     }
 
     proptest::proptest! {

@@ -157,6 +157,31 @@ fn write_frame(stream: &mut impl Write, request: &Value) {
     stream.flush().expect("flush frame");
 }
 
+/// The CLI writes raw OpenPGP packets; the bridge takes armored text. Wrap
+/// the packets in armor exactly as an email client would when pasting them.
+fn armor_binary(binary: &[u8]) -> String {
+    struct Raw(Vec<u8>);
+    impl pgp::ser::Serialize for Raw {
+        fn to_writer<W: Write>(&self, writer: &mut W) -> pgp::errors::Result<()> {
+            writer.write_all(&self.0)?;
+            Ok(())
+        }
+        fn write_len(&self) -> usize {
+            self.0.len()
+        }
+    }
+    let mut out = Vec::new();
+    pgp::armor::write(
+        &Raw(binary.to_vec()),
+        pgp::armor::BlockType::Message,
+        &mut out,
+        None,
+        true,
+    )
+    .expect("armor the CLI ciphertext");
+    String::from_utf8(out).expect("armor is UTF-8")
+}
+
 fn parse_frames(bytes: &[u8]) -> Vec<Value> {
     let mut pos = 0;
     let mut frames = Vec::new();
@@ -426,14 +451,38 @@ fn backup_create_prints_a_9x4_code_and_restore_recovers_the_key() {
         "backup",
         "restore",
         backup.to_str().unwrap(),
-        &code,
         restored.to_str().unwrap(),
+        "--code",
+        &code,
     ]);
     assert!(out.contains("Key restored."), "output: {out}");
     assert_eq!(
         fs::read_to_string(&restored).expect("read restored key"),
         original,
         "the restored secret key must be byte-for-byte the original"
+    );
+
+    // The setup code can also arrive through the environment, so it never has
+    // to appear in a shell history or process list.
+    let env_restored = home.file("restored-from-env.asc");
+    let env_out = home
+        .command(&[
+            "backup",
+            "restore",
+            backup.to_str().unwrap(),
+            env_restored.to_str().unwrap(),
+        ])
+        .env("NEWPGP_SETUP_CODE", &code)
+        .output()
+        .expect("could not run newpgp");
+    assert!(
+        env_out.status.success(),
+        "restore via NEWPGP_SETUP_CODE failed: {}",
+        String::from_utf8_lossy(&env_out.stderr)
+    );
+    assert_eq!(
+        fs::read_to_string(&env_restored).expect("read env-restored key"),
+        original
     );
 }
 
@@ -631,4 +680,288 @@ fn decrypt_with_the_wrong_home_fails_with_a_friendly_hint() {
         "actionable hint expected, got: {stderr}"
     );
     assert!(!stranger.file("should-not-exist.bin").exists());
+}
+
+/// Import two different keys for one address. The second one must not become
+/// active until the user explicitly confirms the change.
+#[test]
+fn changed_key_is_not_activated_without_confirmation() {
+    let owner = Home::new("tofu-owner");
+    let first = Home::new("tofu-first");
+    let second = Home::new("tofu-second");
+    let first_out = init(&first, "First Key", "friend@example.com");
+    let second_out = init(&second, "Second Key", "friend@example.com");
+    let first_fp = fingerprint(&first_out);
+    let second_fp = fingerprint(&second_out);
+    assert_ne!(first_fp, second_fp, "the two test keys must differ");
+
+    let first_file = owner.file("first.asc");
+    let second_file = owner.file("second.asc");
+    export_public_key(&first, &first_file);
+    export_public_key(&second, &second_file);
+
+    owner.ok(&[
+        "key",
+        "import",
+        "friend@example.com",
+        first_file.to_str().unwrap(),
+    ]);
+    let changed = owner.ok(&[
+        "key",
+        "import",
+        "friend@example.com",
+        second_file.to_str().unwrap(),
+    ]);
+    assert!(
+        changed.contains("WARNING") && changed.contains("HAS CHANGED"),
+        "a loud warning is required: {changed}"
+    );
+    assert!(
+        changed.contains("newpgp key confirm-change friend@example.com")
+            && changed.contains("newpgp key reject-change friend@example.com"),
+        "the user must be told how to resolve the change: {changed}"
+    );
+
+    let list = owner.ok(&["key", "list"]).replace(' ', "");
+    assert!(
+        list.contains(&first_fp),
+        "old key should stay active: {list}"
+    );
+    assert!(
+        !list.contains(&second_fp),
+        "new key must not be active: {list}"
+    );
+
+    let confirmed = owner.ok(&["key", "confirm-change", "friend@example.com"]);
+    assert!(
+        confirmed.contains("Confirmed"),
+        "confirmation output: {confirmed}"
+    );
+    let list = owner.ok(&["key", "list"]).replace(' ', "");
+    assert!(
+        list.contains(&second_fp),
+        "confirmed key should be active: {list}"
+    );
+    assert!(
+        !list.contains(&first_fp),
+        "old key should no longer be active: {list}"
+    );
+
+    // A fresh run: rejecting the change keeps the original key.
+    let rejector = Home::new("tofu-reject");
+    rejector.ok(&[
+        "key",
+        "import",
+        "friend@example.com",
+        first_file.to_str().unwrap(),
+    ]);
+    rejector.ok(&[
+        "key",
+        "import",
+        "friend@example.com",
+        second_file.to_str().unwrap(),
+    ]);
+    let rejected = rejector.ok(&["key", "reject-change", "friend@example.com"]);
+    assert!(
+        rejected.contains("unchanged"),
+        "rejection output: {rejected}"
+    );
+    let list = rejector.ok(&["key", "list"]).replace(' ', "");
+    assert!(
+        list.contains(&first_fp),
+        "old key must survive rejection: {list}"
+    );
+    assert!(
+        !list.contains(&second_fp),
+        "rejected key must not be active: {list}"
+    );
+}
+
+#[test]
+fn bridge_get_key_without_email_returns_the_own_identity() {
+    let home = Home::new("bridge-own-identity");
+    let other = Home::new("bridge-earlier-contact");
+    let other_out = init(&other, "Aardvark", "aardvark@example.com");
+    let other_fp = fingerprint(&other_out);
+
+    let output = bridge_exchange(
+        &home,
+        &[json!({
+            "id": "1",
+            "method": "generateKey",
+            "params": {
+                "name": "Zebra",
+                "email": "zebra@example.com",
+                "passphrase": ""
+            }
+        })],
+    );
+    let frames = parse_frames(&output.stdout);
+    assert_eq!(frames[0]["ok"].as_bool(), Some(true), "{}", frames[0]);
+    let own_fp = raw_fingerprint(frames[0]["result"]["fingerprint"].as_str().unwrap());
+
+    // "aardvark@example.com" sorts before "zebra@example.com" (and before the
+    // empty email used for the own identity), so the old code returned it.
+    let other_key = home.file("aardvark.asc");
+    export_public_key(&other, &other_key);
+    home.ok(&[
+        "key",
+        "import",
+        "aardvark@example.com",
+        other_key.to_str().unwrap(),
+    ]);
+
+    let output = bridge_exchange(
+        &home,
+        &[json!({
+            "id": "2",
+            "method": "getKey",
+            "params": {}
+        })],
+    );
+    let frames = parse_frames(&output.stdout);
+    assert_eq!(frames.len(), 1);
+    assert_eq!(frames[0]["ok"].as_bool(), Some(true), "{}", frames[0]);
+    assert_eq!(
+        raw_fingerprint(frames[0]["result"]["fingerprint"].as_str().unwrap()),
+        own_fp,
+        "getKey without an email must return our own key"
+    );
+    assert_ne!(
+        frames[0]["result"]["fingerprint"].as_str().unwrap(),
+        other_fp
+    );
+}
+
+#[test]
+fn bridge_decrypt_and_sign_respect_the_generated_passphrase() {
+    let home = Home::new("bridge-passphrase");
+    let email = "locked@example.com";
+    let passphrase = "correct horse battery staple";
+    let output = bridge_exchange(
+        &home,
+        &[json!({
+            "id": "1",
+            "method": "generateKey",
+            "params": { "name": "Locked User", "email": email, "passphrase": passphrase }
+        })],
+    );
+    let frames = parse_frames(&output.stdout);
+    assert_eq!(frames[0]["ok"].as_bool(), Some(true), "{}", frames[0]);
+
+    let plaintext = "a secret only the right password opens";
+    fs::write(home.file("plain.txt"), plaintext).expect("write plaintext");
+    home.ok(&[
+        "encrypt",
+        "-r",
+        email,
+        "-f",
+        home.file("plain.txt").to_str().unwrap(),
+        "-o",
+        home.file("cipher.bin").to_str().unwrap(),
+    ]);
+    let armored = armor_binary(&fs::read(home.file("cipher.bin")).expect("read ciphertext"));
+
+    let good = bridge_exchange(
+        &home,
+        &[json!({
+            "id": "2",
+            "method": "decrypt",
+            "params": { "armored": armored, "passphrase": passphrase }
+        })],
+    );
+    let frames = parse_frames(&good.stdout);
+    assert_eq!(frames[0]["ok"].as_bool(), Some(true), "{}", frames[0]);
+    assert_eq!(
+        frames[0]["result"]["plaintext"].as_str(),
+        Some(plaintext),
+        "the right passphrase must unlock the key"
+    );
+
+    let bad = bridge_exchange(
+        &home,
+        &[json!({
+            "id": "3",
+            "method": "decrypt",
+            "params": { "armored": armored, "passphrase": "definitely wrong" }
+        })],
+    );
+    let frames = parse_frames(&bad.stdout);
+    assert_eq!(frames[0]["ok"].as_bool(), Some(false), "{}", frames[0]);
+    let message = frames[0]["error"]["message"].as_str().unwrap_or_default();
+    assert!(
+        message.to_ascii_lowercase().contains("password"),
+        "wrong passphrase should be explained: {message}"
+    );
+
+    let signed = bridge_exchange(
+        &home,
+        &[json!({
+            "id": "4",
+            "method": "sign",
+            "params": { "data": "signed data", "passphrase": passphrase }
+        })],
+    );
+    let frames = parse_frames(&signed.stdout);
+    assert_eq!(frames[0]["ok"].as_bool(), Some(true), "{}", frames[0]);
+    assert!(frames[0]["result"]["armored"]
+        .as_str()
+        .unwrap_or_default()
+        .contains("-----BEGIN PGP SIGNATURE-----"));
+}
+
+#[test]
+fn encrypt_accepts_a_fingerprint_as_a_recipient() {
+    let alice = Home::new("fingerprint-alice");
+    let bob = Home::new("fingerprint-bob");
+    init(&alice, "Alice Example", "alice@example.com");
+    let bob_out = init(&bob, "Bob Example", "bob@example.com");
+    let bob_fp = fingerprint(&bob_out);
+
+    let bob_key = alice.file("bob.asc");
+    export_public_key(&bob, &bob_key);
+    alice.ok(&[
+        "key",
+        "import",
+        "bob@example.com",
+        bob_key.to_str().unwrap(),
+    ]);
+
+    let spaced = bob_fp
+        .as_bytes()
+        .chunks(4)
+        .map(|c| std::str::from_utf8(c).unwrap())
+        .collect::<Vec<_>>()
+        .join(" ");
+
+    for (index, recipient) in [bob_fp.as_str(), spaced.as_str()].into_iter().enumerate() {
+        let input = alice.file(&format!("fingerprint-{index}.txt"));
+        let encrypted = alice.file(&format!("fingerprint-{index}.txt.pgp"));
+        let decrypted = bob.file(&format!("fingerprint-{index}.decrypted.txt"));
+        fs::write(&input, b"fingerprint recipient works").expect("write plaintext");
+        let out = alice.ok(&[
+            "encrypt",
+            "-r",
+            recipient,
+            "-f",
+            input.to_str().unwrap(),
+            "-o",
+            encrypted.to_str().unwrap(),
+        ]);
+        assert!(
+            out.contains("Encrypted"),
+            "encrypt to fingerprint failed: {out}"
+        );
+        bob.ok(&[
+            "decrypt",
+            "-f",
+            encrypted.to_str().unwrap(),
+            "-o",
+            decrypted.to_str().unwrap(),
+        ]);
+        assert_eq!(
+            fs::read(&decrypted).expect("read decrypted file"),
+            b"fingerprint recipient works"
+        );
+    }
 }

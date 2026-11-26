@@ -243,7 +243,15 @@ try {
         Assert-Condition ($backupText.Contains('-----BEGIN PGP MESSAGE-----')) 'backup is not an encrypted PGP message'
 
         $restored = Join-Path $alice 'restored.asc'
-        $restore = Invoke-Newpgp -HomeDir $alice -Arguments @('backup', 'restore', $backup, $codeMatch.Value, $restored)
+        # Keep the setup code out of the process list and shell history.
+        $oldSetupCode = $env:NEWPGP_SETUP_CODE
+        $env:NEWPGP_SETUP_CODE = $codeMatch.Value
+        try {
+            $restore = Invoke-Newpgp -HomeDir $alice -Arguments @('backup', 'restore', $backup, $restored)
+        } finally {
+            if ($null -eq $oldSetupCode) { Remove-Item Env:NEWPGP_SETUP_CODE -ErrorAction SilentlyContinue }
+            else { $env:NEWPGP_SETUP_CODE = $oldSetupCode }
+        }
         Assert-Condition ($restore.Text.Contains('Key restored.')) "unexpected restore output: $($restore.Text)"
         $original = [System.IO.File]::ReadAllText((Join-Path $alice 'identity.asc'))
         Assert-Condition (([System.IO.File]::ReadAllText($restored)) -ceq $original) 'restored key does not match the original'

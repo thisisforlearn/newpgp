@@ -41,8 +41,11 @@ pub fn local_hash(local: &str) -> String {
 }
 
 /// WKD's preferred "advanced method": a dedicated `openpgpkey` subdomain.
+/// draft-22 requires the domain to be lowercase in both the host and the
+/// path — DNS is case-insensitive but the well-known path is not.
 pub fn advanced_url(local: &str, domain: &str) -> Result<String> {
     check_parts(local, domain)?;
+    let domain = domain.to_ascii_lowercase();
     let hash = local_hash(local);
     let encoded = form_urlencoded::byte_serialize(local.as_bytes()).collect::<String>();
     Ok(format!(
@@ -53,6 +56,7 @@ pub fn advanced_url(local: &str, domain: &str) -> Result<String> {
 /// WKD fallback when the `openpgpkey` subdomain does not exist.
 pub fn direct_url(local: &str, domain: &str) -> Result<String> {
     check_parts(local, domain)?;
+    let domain = domain.to_ascii_lowercase();
     let hash = local_hash(local);
     let encoded = form_urlencoded::byte_serialize(local.as_bytes()).collect::<String>();
     Ok(format!(
@@ -91,13 +95,13 @@ mod tests {
         let url = advanced_url("Joe.Doe", "Example.ORG").unwrap();
         assert_eq!(
             url,
-            "https://openpgpkey.Example.ORG/.well-known/openpgpkey/Example.ORG/hu/iy9q119eutrkn8s1mk4r39qejnbu3n5q?l=Joe.Doe"
+            "https://openpgpkey.example.org/.well-known/openpgpkey/example.org/hu/iy9q119eutrkn8s1mk4r39qejnbu3n5q?l=Joe.Doe"
         );
     }
 
     #[test]
-    fn direct_url_shape() {
-        let url = direct_url("alice", "example.org").unwrap();
+    fn direct_url_lowercases_the_domain() {
+        let url = direct_url("alice", "Example.ORG").unwrap();
         assert!(url.starts_with("https://example.org/.well-known/openpgpkey/hu/"));
         assert!(url.ends_with("?l=alice"));
     }

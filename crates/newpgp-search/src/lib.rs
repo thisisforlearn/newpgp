@@ -6,6 +6,7 @@
 //! to a server, so the webmail provider cannot see what you search for. The
 //! key is supplied by the app (normally from the OS keychain).
 
+use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use aes_gcm::aead::{Aead, KeyInit, OsRng};
@@ -150,30 +151,29 @@ impl SearchIndex {
         Ok(hits)
     }
 
-    /// Persist the index atomically.
+    /// Persist the index atomically, using a uniquely named temporary file and
+    /// an atomic replace so the original is never deleted before the new index
+    /// is ready (Windows included).
     pub fn save(&self) -> Result<()> {
-        if let Some(parent) = self.path.parent() {
-            std::fs::create_dir_all(parent).map_err(|e| {
-                Error::new("index_write", "Could not create the index folder.")
-                    .with_hint(e.to_string())
-            })?;
-        }
+        let parent = self
+            .path
+            .parent()
+            .filter(|p| !p.as_os_str().is_empty())
+            .unwrap_or_else(|| Path::new("."));
+        std::fs::create_dir_all(parent).map_err(|e| {
+            Error::new("index_write", "Could not create the index folder.").with_hint(e.to_string())
+        })?;
         let bytes = serde_json::to_vec(&IndexFile {
             entries: self.entries.clone(),
         })
         .map_err(|_| Error::new("index_write", "Could not serialize the search index."))?;
-        let tmp = self.path.with_extension("tmp");
-        std::fs::write(&tmp, bytes).map_err(|e| {
+        let mut tmp = tempfile::NamedTempFile::new_in(parent).map_err(|e| {
             Error::new("index_write", "Could not save the search index.").with_hint(e.to_string())
         })?;
-        #[cfg(windows)]
-        if self.path.exists() {
-            std::fs::remove_file(&self.path).map_err(|e| {
-                Error::new("index_write", "Could not replace the search index.")
-                    .with_hint(e.to_string())
-            })?;
-        }
-        std::fs::rename(&tmp, &self.path).map_err(|e| {
+        tmp.write_all(&bytes).map_err(|e| {
+            Error::new("index_write", "Could not save the search index.").with_hint(e.to_string())
+        })?;
+        tmp.persist(&self.path).map_err(|e| {
             Error::new("index_write", "Could not finalize the search index.")
                 .with_hint(e.to_string())
         })?;
@@ -194,8 +194,16 @@ fn snippet(body: &str, needle: &str) -> String {
     let Some(pos) = lower.find(needle) else {
         return body.chars().take(80).collect();
     };
-    let start = pos.saturating_sub(30);
-    let end = (pos + needle.len() + 50).min(body.len());
+    // `pos` and `needle.len()` are byte offsets. Round both window edges down
+    // (start) / up (end) to a UTF-8 character boundary before slicing.
+    let mut start = pos.saturating_sub(30);
+    while start > 0 && !body.is_char_boundary(start) {
+        start -= 1;
+    }
+    let mut end = (pos + needle.len() + 50).min(body.len());
+    while end < body.len() && !body.is_char_boundary(end) {
+        end += 1;
+    }
     let mut out = String::new();
     if start > 0 {
         out.push('…');
@@ -252,6 +260,34 @@ mod tests {
         assert_eq!(index.len(), 1);
         assert!(index.search("old").unwrap().is_empty());
         assert_eq!(index.search("new").unwrap().len(), 1);
+    }
+
+    #[test]
+    fn snippet_with_multibyte_characters_does_not_panic() {
+        let dir = tempdir().unwrap();
+        let body = format!("{}needle", "😀".repeat(20));
+        // The private helper is exercised through `search`, where the byte
+        // offset used to land in the middle of an emoji.
+        let mut index = SearchIndex::open(&dir.path().join("i"), [4u8; 32]).unwrap();
+        index.upsert(&summary("emoji", &body)).unwrap();
+        let hits = index.search("needle").unwrap();
+        assert_eq!(hits.len(), 1);
+        assert!(hits[0].snippet.contains("needle"));
+    }
+
+    #[test]
+    fn repeated_saves_replace_the_existing_index() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("i");
+        let mut index = SearchIndex::open(&path, [5u8; 32]).unwrap();
+        index.upsert(&summary("1", "first text")).unwrap();
+        index.save().unwrap();
+        index.upsert(&summary("1", "second text")).unwrap();
+        index.save().unwrap();
+        let reloaded = SearchIndex::open(&path, [5u8; 32]).unwrap();
+        assert_eq!(reloaded.len(), 1);
+        assert_eq!(reloaded.search("second").unwrap().len(), 1);
+        assert!(reloaded.search("first").unwrap().is_empty());
     }
 
     #[test]

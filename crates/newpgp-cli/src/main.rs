@@ -20,7 +20,7 @@ use newpgp_core::message::{decrypt_bytes, encrypt_text, EncryptionProfile, Signa
 use newpgp_core::{Error, Result};
 use newpgp_discovery::invite::Invite;
 use newpgp_discovery::{discover, HttpFetcher};
-use newpgp_keyring::{KeyRing, KeySource, TofuOutcome};
+use newpgp_keyring::{Contact, KeyRing, KeySource, TofuOutcome};
 use newpgp_mail::{compose, ComposeMode, ComposeRequest};
 use newpgp_search::{MessageSummary, SearchIndex};
 use pgp::composed::{Deserializable, DetachedSignature, SignedPublicKey};
@@ -55,6 +55,8 @@ enum Command {
         #[arg(long)]
         email: String,
         /// Password for the key. Leave empty for no password.
+        /// Prefer the NEWPGP_KEY_PASSWORD environment variable so the secret
+        /// never appears in shell history or the process list.
         #[arg(long, env = "NEWPGP_KEY_PASSWORD", default_value = "")]
         password: String,
     },
@@ -147,6 +149,10 @@ enum KeyCommand {
     Invite { email: String },
     /// Verify a contact using a safety number read out of band.
     Verify { email: String, code: String },
+    /// Accept a pending key change after comparing the safety number.
+    ConfirmChange { email: String },
+    /// Keep the old key and discard a pending key change.
+    RejectChange { email: String },
 }
 
 #[derive(Debug, Subcommand)]
@@ -158,13 +164,19 @@ enum BackupCommand {
     /// Restore a setup-code backup.
     Restore {
         file: PathBuf,
-        code: String,
         output: PathBuf,
+        /// The 36-digit setup code. Use NEWPGP_SETUP_CODE to keep it off the
+        /// command line and out of shell history.
+        #[arg(long, env = "NEWPGP_SETUP_CODE")]
+        code: String,
     },
     /// Restore a public-key backup.
     RestoreWithKey {
         file: PathBuf,
         output: PathBuf,
+        /// Password protecting the key used to decrypt the backup. Use
+        /// NEWPGP_KEY_PASSWORD to keep it off the command line.
+        #[arg(long, env = "NEWPGP_KEY_PASSWORD")]
         password: String,
     },
 }
@@ -214,9 +226,18 @@ fn resolve_recipient(value: &str, ring: &KeyRing) -> Result<SignedPublicKey> {
     if let Some(contact) = ring.get(value) {
         return contact.public_key();
     }
+    // Help text advertises fingerprints, so accept them as recipients too.
+    // Spaces and case are insignificant in a fingerprint.
+    let wanted = value.replace(' ', "");
+    if let Some(contact) = ring
+        .contacts()
+        .find(|c| c.fingerprint.replace(' ', "").eq_ignore_ascii_case(&wanted))
+    {
+        return contact.public_key();
+    }
     Err(
         Error::new("unknown_recipient", format!("No key found for '{value}'."))
-            .with_hint("Run `newpgp key find <email>` or give them an invite link."),
+            .with_hint("Use an email address, a fingerprint, or an armored public key."),
     )
 }
 
@@ -437,14 +458,17 @@ async fn key_command(home: &Path, action: &KeyCommand) -> Result<()> {
             let outcome = ring.learn(email, &found.cert, found.source)?;
             ring.save()?;
             match outcome {
-                TofuOutcome::KeyChanged { .. } => {
-                    println!("WARNING: this key is different from the one saved before.");
-                    println!("Compare the safety number with them before using it.");
+                TofuOutcome::KeyChanged { previous, current } => {
+                    // Saving records the *pending* change; the keyring keeps the
+                    // old key active until the user explicitly confirms it.
+                    print_key_change_warning(&ring, email, &previous, &current);
                 }
-                _ => println!("Found and saved a key for {email} via {}.", found.url),
+                _ => {
+                    println!("Found and saved a key for {email} via {}.", found.url);
+                    println!("Fingerprint: {}", found.fingerprint);
+                    println!("Safety number: {}", ring.safety_number_for(email)?);
+                }
             }
-            println!("Fingerprint: {}", found.fingerprint);
-            println!("Safety number: {}", ring.safety_number_for(email)?);
             Ok(())
         }
         KeyCommand::Import { email, file } => {
@@ -453,12 +477,18 @@ async fn key_command(home: &Path, action: &KeyCommand) -> Result<()> {
             })?;
             let cert = parse_public_key(&bytes)?;
             let mut ring = load_keyring(home)?;
-            ring.learn(email, &cert, KeySource::Manual)?;
+            let outcome = ring.learn(email, &cert, KeySource::Manual)?;
             ring.save()?;
-            println!(
-                "Saved key for {email}. Safety number: {}",
-                ring.safety_number_for(email)?
-            );
+            match outcome {
+                TofuOutcome::KeyChanged { previous, current } => {
+                    // The old key stays active; only the pending change is saved.
+                    print_key_change_warning(&ring, email, &previous, &current);
+                }
+                _ => println!(
+                    "Saved key for {email}. Safety number: {}",
+                    ring.safety_number_for(email)?
+                ),
+            }
             Ok(())
         }
         KeyCommand::Invite { email } => {
@@ -477,7 +507,61 @@ async fn key_command(home: &Path, action: &KeyCommand) -> Result<()> {
             println!("Verified. You'll be warned if this key ever changes.");
             Ok(())
         }
+        KeyCommand::ConfirmChange { email } => {
+            let mut ring = load_keyring(home)?;
+            let new_fingerprint = ring
+                .pending_change(email)
+                .map(|c| c.pretty_fingerprint())
+                .unwrap_or_default();
+            ring.confirm_change(email)?;
+            ring.save()?;
+            println!(
+                "Confirmed. The new key for {email} is now active. Fingerprint: {new_fingerprint}"
+            );
+            println!("Safety number: {}", ring.safety_number_for(email)?);
+            Ok(())
+        }
+        KeyCommand::RejectChange { email } => {
+            let mut ring = load_keyring(home)?;
+            ring.reject_change(email)?;
+            ring.save()?;
+            println!("Rejected. Your existing key for {email} is unchanged.");
+            Ok(())
+        }
     }
+}
+
+/// Loud, plain-language warning shown when a contact's key changes.
+///
+/// The new key is deliberately *not* activated here: the user must compare a
+/// safety number out of band and then run `key confirm-change` (or reject it).
+fn print_key_change_warning(ring: &KeyRing, email: &str, previous: &Contact, current: &Contact) {
+    let safety = |contact: &Contact| -> String {
+        match ring.own_identity().and_then(|me| me.public_key().ok()) {
+            Some(me) => match contact.public_key() {
+                Ok(key) => newpgp_core::keys::safety_number(&me, &key),
+                Err(_) => newpgp_keyring::short_code(&contact.fingerprint),
+            },
+            None => newpgp_keyring::short_code(&contact.fingerprint),
+        }
+    };
+
+    println!();
+    println!("*** WARNING: THE KEY FOR {email} HAS CHANGED ***");
+    println!("The key I just found is different from the one saved for {email}.");
+    println!("That can be a normal new key, or it can be someone pretending to be {email}.");
+    println!("I have NOT replaced the saved key. The old key is still the one in use.");
+    println!("Old key fingerprint: {}", previous.pretty_fingerprint());
+    println!("New key fingerprint: {}", current.pretty_fingerprint());
+    println!("Old safety number: {}", safety(previous));
+    println!("New safety number: {}", safety(current));
+    println!();
+    println!("Call {email} on a number you already trust (or meet in person) and compare");
+    println!("the safety number. Do not compare it over the same email you are worried about.");
+    println!("If the new key is right, run:");
+    println!("    newpgp key confirm-change {email}");
+    println!("If the new key is wrong, run:");
+    println!("    newpgp key reject-change {email}");
 }
 
 fn backup_command(home: &Path, action: &BackupCommand) -> Result<()> {
@@ -614,6 +698,17 @@ fn param<'a>(params: &'a Value, name: &str) -> &'a str {
     params.get(name).and_then(Value::as_str).unwrap_or("")
 }
 
+/// A key password supplied by the extension. `password` is accepted as a
+/// friendly alias for older callers, but `passphrase` is the documented field.
+fn bridge_passphrase(params: &Value) -> &str {
+    let value = param(params, "passphrase");
+    if value.is_empty() {
+        param(params, "password")
+    } else {
+        value
+    }
+}
+
 async fn handle_bridge(home: &Path, request: BridgeRequest) -> Value {
     let id = request.id.as_str();
     let params = &request.params;
@@ -717,6 +812,23 @@ async fn handle_bridge(home: &Path, request: BridgeRequest) -> Value {
             };
             let ring = load_keyring(home)
                 .unwrap_or_else(|_| KeyRing::open(Path::new("unused.json")).unwrap());
+            let key_password = bridge_passphrase(params);
+            // A generated key can have an unprotected encryption subkey even
+            // when its primary key is locked. rPGP would then decrypt without
+            // ever checking the password, so check it explicitly first and
+            // honour what the caller told us about the key.
+            if identity
+                .secret
+                .primary_key
+                .unlock(&Password::from(key_password), |_, _| Ok(()))
+                .is_err()
+            {
+                return fail(
+                    id,
+                    "DECRYPT_FAILED",
+                    "That key is locked with a different password. Try the password you chose when you created your key.",
+                );
+            }
             let known: Vec<SignedPublicKey> = ring
                 .contacts()
                 .filter_map(|c| c.public_key().ok())
@@ -724,7 +836,7 @@ async fn handle_bridge(home: &Path, request: BridgeRequest) -> Value {
             match decrypt_bytes(
                 param(params, "armored").as_bytes(),
                 &identity.secret,
-                "",
+                key_password,
                 &known,
             ) {
                 Ok(result) => {
@@ -752,7 +864,7 @@ async fn handle_bridge(home: &Path, request: BridgeRequest) -> Value {
             let signature = DetachedSignature::sign_binary_data(
                 OsRng,
                 &identity.secret.primary_key,
-                &Password::empty(),
+                &Password::from(bridge_passphrase(params)),
                 HashAlgorithm::Sha256,
                 data,
             );
@@ -798,7 +910,9 @@ async fn handle_bridge(home: &Path, request: BridgeRequest) -> Value {
             };
             let email = param(params, "email");
             let contact = if email.is_empty() {
-                ring.contacts().next()
+                // With no address requested, return our own identity rather
+                // than an arbitrary contact from the BTreeMap.
+                ring.own_identity()
             } else {
                 ring.get(email)
             };
@@ -861,6 +975,29 @@ mod tests {
         let ring = KeyRing::open(Path::new("nonexistent.json")).unwrap();
         let cert = resolve_recipient(&alice.public_armor().unwrap(), &ring).unwrap();
         assert_eq!(raw_fingerprint(&cert), alice.fingerprint.replace(' ', ""));
+    }
+
+    #[test]
+    fn recipient_resolution_accepts_fingerprints() {
+        let alice = generate_identity("Alice", "alice@example.com", "").unwrap();
+        let mut ring = KeyRing::open(Path::new("nonexistent.json")).unwrap();
+        ring.learn("alice@example.com", &alice.public, KeySource::Manual)
+            .unwrap();
+
+        let raw = alice.fingerprint.replace(' ', "");
+        let lower = raw.to_ascii_lowercase();
+        let spaced = raw
+            .as_bytes()
+            .chunks(4)
+            .map(|c| std::str::from_utf8(c).unwrap())
+            .collect::<Vec<_>>()
+            .join(" ");
+
+        for value in [raw.as_str(), lower.as_str(), spaced.as_str()] {
+            let cert = resolve_recipient(value, &ring)
+                .unwrap_or_else(|e| panic!("fingerprint {value} was not resolved: {e:?}"));
+            assert_eq!(raw_fingerprint(&cert), raw);
+        }
     }
 
     #[test]

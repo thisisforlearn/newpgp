@@ -136,12 +136,7 @@ pub fn restore_public_key_backup(
         })?;
     let mut message = message
         .decrypt(&Password::from(key_password), secret)
-        .map_err(|_| {
-            Error::new(
-                "backup_wrong_key",
-                "That backup wasn't encrypted for the key you selected.",
-            )
-        })?;
+        .map_err(|e| decrypt_failure(&e.to_string()))?;
     if message.is_compressed() {
         message = message
             .decompress()
@@ -154,6 +149,28 @@ pub fn restore_public_key_backup(
         .map_err(|_| Error::new("bad_backup", "That backup did not contain a readable key."))?;
     parse_secret_key(text.as_bytes())?;
     Ok(text)
+}
+
+/// Turn a decryption failure into an actionable message.
+///
+/// rPGP reports a locked key and a mismatched recipient the same way at this
+/// layer. Inspect the underlying text, the same way `core/message.rs` does, so
+/// the user is sent after the right secret.
+fn decrypt_failure(source: &str) -> Error {
+    let text = source.to_ascii_lowercase();
+    if text.contains("password") || text.contains("passphrase") {
+        Error::new(
+            "wrong_key_password",
+            "That key is locked with a different password.",
+        )
+        .with_hint("Try the password you chose when you created your key.")
+    } else {
+        Error::new(
+            "backup_wrong_key",
+            "That backup wasn't encrypted for the key you selected.",
+        )
+        .with_hint("Check which key you are using to restore the backup.")
+    }
 }
 
 fn encrypt_with_code(plaintext: &[u8], code: &str) -> Result<String> {
@@ -324,6 +341,43 @@ mod tests {
             raw_fingerprint(&key.primary_key),
             raw_fingerprint(&alice.secret.primary_key)
         );
+    }
+
+    #[test]
+    fn public_key_backup_tells_a_wrong_password_from_a_wrong_key() {
+        let locked = decrypt_failure("invalid password");
+        assert_eq!(locked.code, "wrong_key_password");
+        assert!(locked
+            .hint
+            .as_deref()
+            .unwrap_or_default()
+            .contains("password"));
+        let passphrase = decrypt_failure("Incorrect passphrase supplied");
+        assert_eq!(passphrase.code, "wrong_key_password");
+        let no_match = decrypt_failure("missing key");
+        assert_eq!(no_match.code, "backup_wrong_key");
+        assert!(no_match
+            .hint
+            .as_deref()
+            .unwrap_or_default()
+            .contains("which key"));
+
+        let alice = generate_identity("Alice", "alice@example.com", "").unwrap();
+        let bob = generate_identity("Bob", "bob@example.com", "unlock-me").unwrap();
+        let eve = generate_identity("Eve", "eve@example.com", "unlock-me").unwrap();
+        let backup =
+            create_public_key_backup(&alice.secret_armor().unwrap(), &bob.public_armor().unwrap())
+                .unwrap();
+
+        let restored = restore_public_key_backup(&backup, &bob.secret, "unlock-me").unwrap();
+        assert_eq!(
+            raw_fingerprint(&parse_secret_key(restored.as_bytes()).unwrap().primary_key),
+            raw_fingerprint(&alice.secret.primary_key)
+        );
+
+        // A different key cannot read the backup and is reported as such.
+        let wrong_key = restore_public_key_backup(&backup, &eve.secret, "unlock-me").unwrap_err();
+        assert_eq!(wrong_key.code, "backup_wrong_key");
     }
 
     #[test]
