@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Vaibhav - https://github.com/thisisforlearn
 package com.newpgp.keyboard
 
+import android.inputmethodservice.InputMethodService
 import android.os.Build
 import android.view.KeyEvent
 import android.view.View
