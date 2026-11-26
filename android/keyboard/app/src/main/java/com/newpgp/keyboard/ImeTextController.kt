@@ -96,11 +96,9 @@ class ImeTextController(
         val capitalize = TextProcessing.isSentenceStart(context) || capsMode != 0
         val allowCorrection = autocorrectEnabled() && word.isNotEmpty()
         val replacement = if (allowCorrection) engine.correction(word, capitalize) else null
-        // Capitalization is not "correction": it must still apply when the user
-        // disabled autocorrect, otherwise the first word of a sentence stays lowercase.
         val finalWord = when {
             replacement != null -> replacement
-            capitalize -> TextProcessing.applyCase(word, true)
+            allowCorrection -> TextProcessing.applyCase(word, capitalize)
             else -> word
         }
         val separator = TextProcessing.separatorBefore(context, finalWord)
