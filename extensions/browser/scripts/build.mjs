@@ -2,6 +2,7 @@ import { build } from 'esbuild';
 import { cpSync, mkdirSync, rmSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { writeIcons } from './icons.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const dist = join(root, 'dist');
@@ -43,5 +44,9 @@ for (const [from, to] of copies) {
   mkdirSync(dirname(target), { recursive: true });
   cpSync(join(root, from), target);
 }
+
+// Chrome does not accept SVG in the manifest `icons` key. Rasterise the same
+// shield artwork to real PNGs so the unpacked extension loads in every target.
+writeIcons(dist);
 
 console.log(`NewPGP extension built into ${dist}`);

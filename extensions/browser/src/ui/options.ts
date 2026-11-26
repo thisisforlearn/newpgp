@@ -15,6 +15,7 @@ const enabledToggle = requireElement<HTMLInputElement>('#enabled-toggle');
 const autosaveToggle = requireElement<HTMLInputElement>('#autosave-toggle');
 const modeDescription = requireElement<HTMLElement>('#mode-description');
 const saved = requireElement<HTMLElement>('#saved-status');
+const settingsError = requireElement<HTMLElement>('#settings-error');
 
 let settings: Settings = { ...DEFAULT_SETTINGS };
 
@@ -26,25 +27,33 @@ function apply(next: Settings): void {
   modeDescription.textContent = describeMode(next.sendMode).description;
 }
 
-function persist(): void {
-  void callBackground(api, { type: 'SET_SETTINGS', settings }).then((response) => {
-    saved.textContent = response.ok ? 'Saved' : 'Could not save settings';
-  });
+async function persist(next: Settings): Promise<void> {
+  const previous = settings;
+  apply(next);
+  settingsError.textContent = '';
+  const response = await callBackground(api, { type: 'SET_SETTINGS', settings: next });
+  if (!response.ok) {
+    apply(previous);
+    const friendly = response.error;
+    settingsError.textContent = `Could not save that setting. ${
+      friendly ? `${friendly.title} ${friendly.message}` : 'Please try again.'
+    } Your previous choice was restored.`;
+    saved.textContent = 'Could not save settings';
+    return;
+  }
+  saved.textContent = 'Saved';
 }
 
 modeToggle.addEventListener('change', () => {
-  apply({ ...settings, sendMode: modeToggle.checked ? 'pgp-only' : 'send-both' });
-  persist();
+  void persist({ ...settings, sendMode: modeToggle.checked ? 'pgp-only' : 'send-both' });
 });
 
 enabledToggle.addEventListener('change', () => {
-  apply({ ...settings, enabled: enabledToggle.checked });
-  persist();
+  void persist({ ...settings, enabled: enabledToggle.checked });
 });
 
 autosaveToggle.addEventListener('change', () => {
-  apply({ ...settings, autosaveAcknowledged: autosaveToggle.checked });
-  persist();
+  void persist({ ...settings, autosaveAcknowledged: autosaveToggle.checked });
 });
 
 void callBackground<Settings>(api, { type: 'GET_SETTINGS' }).then((response) => {

@@ -14,6 +14,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "build": "tsc --noEmit && node scripts/build.mjs",
+    "package": "node scripts/package.mjs",
     "typecheck": "tsc --noEmit",
     "lint": "tsc --noEmit"
   },
@@ -21,6 +22,7 @@
     "esbuild": "^0.24.2",
     "jsdom": "^25.0.1",
     "typescript": "^5.7.3",
-    "vitest": "^2.1.8"
+    "vitest": "^2.1.8",
+    "web-ext": "^10.8.0"
   }
 }

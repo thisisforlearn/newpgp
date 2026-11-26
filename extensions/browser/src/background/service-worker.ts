@@ -79,7 +79,20 @@ async function handle(message: RuntimeMessage): Promise<RuntimeResult<unknown>> 
   }
 }
 
-api.runtime.onMessage.addListener((raw: unknown) => {
+interface MessageSender {
+  id?: string;
+  url?: string;
+}
+
+api.runtime.onMessage.addListener((raw: unknown, sender?: MessageSender) => {
+  // Only our own extension may drive the bridge. A foreign sender id must
+  // never be able to ask us to encrypt/decrypt on its behalf.
+  if (sender?.id && api.runtime.id && sender.id !== api.runtime.id) {
+    return fail({
+      title: 'Request not accepted',
+      message: 'NewPGP only answers requests from its own extension pages.',
+    });
+  }
   if (typeof raw !== 'object' || raw === null) return undefined;
   const message = raw as RuntimeMessage;
   if (typeof message.type !== 'string') return undefined;

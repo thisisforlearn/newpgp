@@ -95,20 +95,30 @@ export class FrameDecoder {
     this.buffer = merged;
 
     const messages: unknown[] = [];
-    while (this.buffer.byteLength >= 4) {
-      const length = decodeFrameLength(this.buffer.subarray(0, 4));
-      const total = 4 + length;
-      if (this.buffer.byteLength < total) break;
+    try {
+      while (this.buffer.byteLength >= 4) {
+        const length = decodeFrameLength(this.buffer.subarray(0, 4));
+        const total = 4 + length;
+        if (this.buffer.byteLength < total) break;
 
-      const payload = this.buffer.subarray(4, total);
-      let parsed: unknown;
-      try {
-        parsed = JSON.parse(utf8Decode(payload));
-      } catch {
-        throw new FramingError('INVALID_JSON', 'Native host sent malformed JSON.');
+        const payload = this.buffer.subarray(4, total);
+        let parsed: unknown;
+        try {
+          // Native messaging is UTF-8 by contract. Fatal decoding prevents a
+          // malformed byte sequence from being parsed as a different message.
+          parsed = JSON.parse(utf8Decode(payload, true));
+        } catch {
+          throw new FramingError('INVALID_JSON', 'Native host sent malformed JSON or invalid UTF-8.');
+        }
+        messages.push(parsed);
+        this.buffer = this.buffer.slice(total);
       }
-      messages.push(parsed);
-      this.buffer = this.buffer.slice(total);
+    } catch (error) {
+      // A poisoned header/payload must not strand the decoder forever: discard
+      // everything buffered so the next well-formed frame can be decoded.
+      this.buffer = new Uint8Array(0);
+      if (error instanceof FramingError) throw error;
+      throw new FramingError('INVALID_JSON', 'Native host sent an unreadable message.');
     }
     return messages;
   }

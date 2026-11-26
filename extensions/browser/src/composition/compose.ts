@@ -6,6 +6,10 @@
  * The user's typed message is never deleted or replaced in the default mode:
  * we append the armored block underneath it. `pgp-only` is an explicit,
  * clearly labelled choice and is the only mode that replaces the draft.
+ *
+ * Safety invariant: without a complete, real PGP armor block this module
+ * NEVER signals `applied: true`. The caller must stop the send instead of
+ * silently falling back to plaintext.
  */
 
 import type { SendMode } from '../types';
@@ -23,6 +27,16 @@ export interface ComposeResult {
   /** True when an armored block was actually appended/inserted. */
   applied: boolean;
   mode: SendMode;
+  /** Why composition refused to apply, for a blocking, friendly notice. */
+  reason?: 'missing-armor' | 'incomplete-armor';
+}
+
+const PGP_BEGIN = '-----BEGIN PGP ';
+const PGP_END = '-----END PGP ';
+
+/** True only for a string that contains a complete armor block. */
+export function hasCompleteArmor(value: unknown): value is string {
+  return typeof value === 'string' && value.includes(PGP_BEGIN) && value.includes(PGP_END);
 }
 
 function separatorFor(draft: string): string {
@@ -33,11 +47,16 @@ function separatorFor(draft: string): string {
 
 export function composeBody(input: ComposeInput): ComposeResult {
   const draft = input.draft ?? '';
-  const armored = (input.armored ?? '').trim();
+  const raw = input.armored;
+  const armored = (typeof raw === 'string' ? raw : '').trim();
 
-  // If encryption did not produce a block, leave the user's words untouched.
+  // Never let an empty, whitespace-only, or garbage "armor" slip through:
+  // sending the plain draft in PGP-only mode would leak the message.
   if (armored.length === 0) {
-    return { body: draft, applied: false, mode: input.mode };
+    return { body: draft, applied: false, mode: input.mode, reason: 'missing-armor' };
+  }
+  if (!hasCompleteArmor(armored)) {
+    return { body: draft, applied: false, mode: input.mode, reason: 'incomplete-armor' };
   }
 
   if (input.mode === 'pgp-only') {

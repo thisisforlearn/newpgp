@@ -29,6 +29,7 @@
           Send both keeps your words readable to everyone and adds an encrypted copy. PGP only sends just the
           encrypted block — people without PGP cannot read it.
         </p>
+        <p id="settings-error" class="settings-error" role="alert"></p>
       </section>
 
       <section class="card">
@@ -64,13 +65,31 @@
       <section class="card">
         <h2>The NewPGP helper</h2>
         <p>
-          Encryption happens in the NewPGP desktop app or CLI daemon, which installs a native messaging host named
-          <code>com.newpgp.bridge</code>. Private keys stay there; the browser extension only sends text to be
-          encrypted or decrypted.
+          Real encryption happens in a small helper on your computer, not in the browser. Your private keys stay
+          there; this extension only sends text to be encrypted or decrypted. You register the helper once, using
+          the installers in the NewPGP source tree:
         </p>
+        <ol>
+          <li>
+            Build or download the <code>newpgp</code> CLI, then run
+            <code>native-host/install.ps1</code> on Windows (for example
+            <code>.\install.ps1 -ChromeExtensionId &lt;your-id&gt; -Executable "C:\path\to\newpgp.exe"</code>) or
+            <code>native-host/install.sh &lt;chrome-id&gt; [firefox-id] [path-to-newpgp]</code> on macOS/Linux.
+          </li>
+          <li>
+            The installer registers <code>com.newpgp.bridge</code> and writes the native messaging manifest
+            (<code>com.newpgp.bridge.json</code>, e.g. under <code>%LOCALAPPDATA%\NewPGP</code> on Windows).
+          </li>
+          <li>
+            Use your real extension ID, exactly as the browser shows it. Firefox uses
+            <code>newpgp@newpgp.local</code>; Chrome and Edge use their own 32-letter ID. An ID mismatch makes the
+            browser refuse to launch the helper.
+          </li>
+          <li>Restart the browser and reload this extension.</li>
+        </ol>
         <p class="hint">
-          If the popup says “Helper not found”, install the NewPGP desktop app, make sure it is running, and reload
-          this extension.
+          There is no background service to keep running. The browser starts the helper automatically whenever the
+          extension needs it. If the popup says “Helper not found”, re-run the installer and reload the extension.
         </p>
       </section>
 

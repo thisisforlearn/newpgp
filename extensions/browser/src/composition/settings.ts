@@ -10,6 +10,18 @@ import type { Settings, SendMode } from '../types';
 
 export const SETTINGS_KEY = 'newpgp.settings.v1';
 
+/**
+ * Last settings we know were real. A transient storage failure must never
+ * drop a PGP-only user back into plaintext-inclusive "send both" mode.
+ * This cache lives in memory only; it holds no message text.
+ */
+let lastKnown: Settings | null = null;
+
+/** For tests and for a clean worker start; never called in normal request flow. */
+export function resetSettingsCache(): void {
+  lastKnown = null;
+}
+
 export const DEFAULT_SETTINGS: Settings = {
   sendMode: 'send-both',
   enabled: true,
@@ -33,13 +45,18 @@ export function sanitizeSettings(value: unknown): Settings {
 export async function loadSettings(api: BrowserApi): Promise<Settings> {
   try {
     const stored = await api.storage.local.get(SETTINGS_KEY);
-    return sanitizeSettings(stored[SETTINGS_KEY]);
+    const clean = sanitizeSettings(stored[SETTINGS_KEY]);
+    lastKnown = clean;
+    return clean;
   } catch {
-    return { ...DEFAULT_SETTINGS };
+    // Storage is temporarily unavailable: keep the strictest preference we
+    // last confirmed rather than reverting to the plaintext-inclusive default.
+    return lastKnown ? { ...lastKnown } : { ...DEFAULT_SETTINGS };
   }
 }
 
 export async function saveSettings(api: BrowserApi, settings: Settings): Promise<void> {
   const clean = sanitizeSettings(settings);
   await api.storage.local.set({ [SETTINGS_KEY]: clean });
+  lastKnown = clean;
 }

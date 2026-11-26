@@ -23,10 +23,10 @@ export class MockEvent<T = unknown> implements BrowserEvent<T> {
     for (const listener of [...this.listeners]) listener(value);
   }
 
-  async emitAsync(value: T): Promise<unknown> {
+  async emitAsync(value: T, sender?: unknown): Promise<unknown> {
     let result: unknown;
     for (const listener of [...this.listeners]) {
-      result = await listener(value);
+      result = await (listener as (value: T, sender?: unknown) => unknown)(value, sender);
       if (result !== undefined) break;
     }
     return result;
@@ -47,7 +47,7 @@ export interface MockBrowserOptions {
 export interface MockBrowserApi extends BrowserApi {
   ports: MockNativePort[];
   connectedHosts: string[];
-  emitRuntimeMessage(message: unknown): Promise<unknown>;
+  emitRuntimeMessage(message: unknown, sender?: unknown): Promise<unknown>;
   store: Record<string, unknown>;
 }
 
@@ -104,10 +104,11 @@ export function createMockBrowserApi(options: MockBrowserOptions = {}): MockBrow
     ports,
     connectedHosts,
     store,
-    emitRuntimeMessage(message) {
-      return onMessage.emitAsync(message);
+    emitRuntimeMessage(message, sender) {
+      return onMessage.emitAsync(message, sender);
     },
     runtime: {
+      id: 'mock-extension',
       onMessage,
       connectNative(host) {
         connectedHosts.push(host);

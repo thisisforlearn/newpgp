@@ -14,9 +14,9 @@ export function utf8Encode(text: string): Uint8Array {
   return bytes;
 }
 
-export function utf8Decode(bytes: Uint8Array): string {
+export function utf8Decode(bytes: Uint8Array, fatal = false): string {
   if (typeof TextDecoder !== 'undefined') {
-    return new TextDecoder('utf-8', { fatal: false }).decode(bytes);
+    return new TextDecoder('utf-8', { fatal }).decode(bytes);
   }
   let escaped = '';
   for (const byte of bytes) {
@@ -25,6 +25,7 @@ export function utf8Decode(bytes: Uint8Array): string {
   try {
     return decodeURIComponent(escaped);
   } catch {
+    if (fatal) throw new Error('Invalid UTF-8 sequence in native message.');
     return '';
   }
 }

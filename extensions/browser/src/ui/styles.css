@@ -147,6 +147,9 @@ code { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size
 .safety-number { margin-top: 8px; font-weight: 600; }
 .notice--error { border-color: color-mix(in srgb, var(--bad) 40%, var(--line)); }
 
+.settings-error { color: var(--bad); font-size: 13px; margin: 6px 0 0; }
+.settings-error:empty { display: none; }
+
 details summary { cursor: pointer; font-weight: 600; }
 details ol { padding-left: 20px; }
 details li { margin: 6px 0; }

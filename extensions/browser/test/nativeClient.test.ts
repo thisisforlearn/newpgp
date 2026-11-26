@@ -28,6 +28,7 @@ interface Loopback {
   requests: BridgeRequest[];
   close(): void;
   pushResponse(message: unknown, splitAt?: number): void;
+  pushBytes(bytes: Uint8Array): void;
 }
 
 function createLoopback(responder: (request: BridgeRequest) => unknown): Loopback {
@@ -76,6 +77,9 @@ function createLoopback(responder: (request: BridgeRequest) => unknown): Loopbac
       }
       receive(framed.subarray(0, splitAt));
       receive(framed.subarray(splitAt));
+    },
+    pushBytes(bytes) {
+      receive(bytes);
     },
   };
 }
@@ -176,6 +180,33 @@ describe('NativeMessagingClient', () => {
     await expect(Promise.resolve(toFriendlyError({ code: 'TIMEOUT', message: 'x' }))).resolves.toMatchObject({
       title: expect.stringMatching(/too long/),
     });
+    client.close();
+  });
+
+  it('fails pending requests fast on a malformed frame and then recovers', async () => {
+    const loopback = createLoopback(() => undefined);
+    const api = createMockBrowserApi();
+    const client = new NativeMessagingClient(api, {
+      transportFactory: () => createFramedTransport(loopback.raw),
+    });
+
+    const broken = client.encrypt({ plaintext: 'hi', recipients: [] });
+    loopback.pushBytes(new Uint8Array([0, 0, 0x11, 0x00])); // oversize length prefix
+    await expect(broken).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+
+    const recovered = client.decrypt({ armored: 'block' });
+    const request = loopback.requests[1];
+    loopback.pushResponse({ id: request?.id, ok: true, result: { plaintext: 'ok', signature: 'verified' } });
+    await expect(recovered).resolves.toEqual({ plaintext: 'ok', signature: 'verified' });
+    client.close();
+  });
+
+  it('rejects pending raw-byte requests instead of waiting for the timeout', async () => {
+    const api = createMockBrowserApi();
+    const client = new NativeMessagingClient(api);
+    const promise = client.encrypt({ plaintext: 'hi', recipients: [] });
+    api.ports[0]?.emitMessage(new Uint8Array([0, 0, 0x11, 0x00]));
+    await expect(promise).rejects.toMatchObject({ code: 'BAD_REQUEST' });
     client.close();
   });
 

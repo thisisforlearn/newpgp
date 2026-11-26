@@ -71,4 +71,31 @@ describe('native messaging framing', () => {
     framed.set(payload, 4);
     expect(() => new FrameDecoder().push(framed)).toThrow(FramingError);
   });
+
+  it('recovers after an oversize header instead of staying poisoned', () => {
+    const decoder = new FrameDecoder();
+    const poison = new Uint8Array([0, 0, 0x11, 0x00]); // 1 MiB + 64 KiB
+    expect(() => decoder.push(poison)).toThrow(FramingError);
+    expect(decoder.pending).toBe(0);
+    expect(decoder.push(encodeMessage({ id: 'after', ok: true }))).toEqual([{ id: 'after', ok: true }]);
+  });
+
+  it('drops the bad payload and decodes the next frame', () => {
+    const decoder = new FrameDecoder();
+    const bad = new TextEncoder().encode('{not json');
+    const badFrame = new Uint8Array(4 + bad.length);
+    badFrame.set(writeUint32LE(bad.length), 0);
+    badFrame.set(bad, 4);
+    expect(() => decoder.push(badFrame)).toThrow(FramingError);
+    expect(decoder.pending).toBe(0);
+    expect(decoder.push(encodeMessage({ healthy: true }))).toEqual([{ healthy: true }]);
+  });
+
+  it('rejects invalid UTF-8 in a frame', () => {
+    const payload = new Uint8Array([0xff, 0xfe, 0x80]);
+    const framed = new Uint8Array(4 + payload.length);
+    framed.set(writeUint32LE(payload.length), 0);
+    framed.set(payload, 4);
+    expect(() => new FrameDecoder().push(framed)).toThrow(expect.objectContaining({ code: 'INVALID_JSON' }));
+  });
 });

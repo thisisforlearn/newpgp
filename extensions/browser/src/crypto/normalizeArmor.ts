@@ -30,6 +30,8 @@ interface RawArmorBlock {
 const BASE64_CHARS = /^[A-Za-z0-9+/=]*$/;
 const BEGIN_LINE = /^-----BEGIN (PGP [A-Z0-9 ]+)-----$/;
 const ARMOR_HEADER_LINE = /^[A-Za-z][A-Za-z0-9-]*: .+$/;
+/** RFC 4880 armor checksum: `=` followed by four base64 characters, on its own line. */
+const CRC_LINE = /^=[A-Za-z0-9+/]{4}$/;
 
 /** Remove HTML wrappers while keeping a newline where a block boundary was. */
 export function stripHtmlWrappers(input: string): string {
@@ -97,6 +99,12 @@ export function decodeQuotedPrintable(input: string): string {
   for (let index = 0; index < lines.length; index += 1) {
     let current = carry + (lines[index] ?? '');
     carry = '';
+    // An armor CRC line starts with '=' but is NOT quoted-printable. Leave it
+    // intact so normalizeArmorBlocks can drop it before joining the base64.
+    if (CRC_LINE.test(current)) {
+      output.push(current);
+      continue;
+    }
     if (/=$/.test(current) && isSoftBreak(current, lines[index + 1] ?? '')) {
       carry = current.slice(0, -1);
       continue;
@@ -206,7 +214,13 @@ export function normalizeArmorBlocks(raw: string): NormalizeResult[] {
       cursor += 1;
     }
 
-    const collected = inner.slice(cursor).join('').replace(/\s+/g, '');
+    const payloadLines = inner.slice(cursor).filter((line) => line !== '');
+    // Canonical armor ends with a CRC24 checksum line. It is not base64 data:
+    // appending it to the ciphertext corrupts the payload (e.g. `...dA==AbCd`).
+    if (payloadLines.length > 0 && CRC_LINE.test(payloadLines[payloadLines.length - 1] ?? '')) {
+      payloadLines.pop();
+    }
+    const collected = payloadLines.join('').replace(/\s+/g, '');
     const unexpected = collected.replace(/[A-Za-z0-9+/=]/g, '');
     if (unexpected.length > 0) {
       warnings.push(`Removed ${unexpected.length} stray character${unexpected.length === 1 ? '' : 's'} from the block body.`);
@@ -259,7 +273,7 @@ export function armorBody(armored: string): string {
   if (end === -1) return '';
   return lines
     .slice(begin + 1, end)
-    .filter((line) => line !== '' && !ARMOR_HEADER_LINE.test(line))
+    .filter((line) => line !== '' && !ARMOR_HEADER_LINE.test(line) && !CRC_LINE.test(line))
     .join('')
     .replace(/\s+/g, '');
 }

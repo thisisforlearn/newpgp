@@ -39,6 +39,8 @@ export interface BrowserTab {
 
 export interface BrowserApi {
   runtime: {
+    /** Extension id, used to reject messages from other extensions. */
+    id?: string;
     connectNative(application: string): NativePort;
     sendMessage(message: unknown): Promise<unknown>;
     onMessage: BrowserEvent<unknown>;

@@ -42,6 +42,8 @@ export interface NativeTransport {
   post(message: unknown): void;
   onMessage(listener: (message: unknown) => void): () => void;
   onDisconnect(listener: () => void): () => void;
+  /** Optional: framed transports report a decode failure so pending work can fail fast. */
+  onDecodeError?(listener: (error: unknown) => void): () => void;
   close(): void;
 }
 
@@ -90,17 +92,30 @@ export interface RawByteTransport {
 /** Transport that performs the native messaging framing itself. */
 export function createFramedTransport(raw: RawByteTransport): NativeTransport {
   const decoder = new FrameDecoder();
+  const decodeErrorListeners = new Set<(error: unknown) => void>();
   return {
     post(message) {
       raw.send(encodeMessage(message));
     },
     onMessage(listener) {
       return raw.onReceive((bytes) => {
-        for (const message of decoder.push(bytes)) listener(message);
+        let messages: unknown[];
+        try {
+          messages = decoder.push(bytes);
+        } catch (error) {
+          decoder.reset();
+          for (const onError of decodeErrorListeners) onError(error);
+          return;
+        }
+        for (const message of messages) listener(message);
       });
     },
     onDisconnect(listener) {
       return raw.onClose(listener);
+    },
+    onDecodeError(listener) {
+      decodeErrorListeners.add(listener);
+      return () => decodeErrorListeners.delete(listener);
     },
     close() {
       raw.close();
@@ -144,14 +159,44 @@ export class NativeMessagingClient implements Bridge {
       transport.onMessage((message) => this.handleIncoming(message)),
       transport.onDisconnect(() => this.handleDisconnect()),
     ];
+    if (transport.onDecodeError) {
+      this.unsubscribers.push(
+        transport.onDecodeError(() => this.handleProtocolError('The native host sent a malformed message.')),
+      );
+    }
     return transport;
   }
 
+  /** Reject every outstanding request without leaving timers running. */
+  private failPending(code: BridgeErrorCode, message: string): void {
+    for (const [id, pending] of this.pending) {
+      clearTimeout(pending.timer);
+      this.pending.delete(id);
+      pending.reject(bridgeError(code, message));
+    }
+  }
+
+  private handleProtocolError(message: string): void {
+    this.decoder.reset();
+    this.failPending('BAD_REQUEST', message);
+  }
+
   private handleIncoming(message: unknown): void {
-    const framed =
-      message instanceof Uint8Array || message instanceof ArrayBuffer || ArrayBuffer.isView(message)
-        ? this.decoder.push(message)
-        : [message];
+    if (
+      !(message instanceof Uint8Array) &&
+      !(message instanceof ArrayBuffer) &&
+      !ArrayBuffer.isView(message)
+    ) {
+      this.handleResponse(message);
+      return;
+    }
+    let framed: unknown[];
+    try {
+      framed = this.decoder.push(message);
+    } catch {
+      this.handleProtocolError('The native host sent a malformed frame.');
+      return;
+    }
     for (const candidate of framed) this.handleResponse(candidate);
   }
 
@@ -173,11 +218,7 @@ export class NativeMessagingClient implements Bridge {
   }
 
   private handleDisconnect(): void {
-    for (const [id, pending] of this.pending) {
-      clearTimeout(pending.timer);
-      this.pending.delete(id);
-      pending.reject(bridgeError('BRIDGE_DISCONNECTED', 'Native host disconnected.'));
-    }
+    this.failPending('BRIDGE_DISCONNECTED', 'Native host disconnected.');
     this.releaseTransport();
   }
 
@@ -241,11 +282,7 @@ export class NativeMessagingClient implements Bridge {
   }
 
   close(): void {
-    for (const [id, pending] of this.pending) {
-      clearTimeout(pending.timer);
-      this.pending.delete(id);
-      pending.reject(bridgeError('BRIDGE_DISCONNECTED', 'Native client closed.'));
-    }
+    this.failPending('BRIDGE_DISCONNECTED', 'Native client closed.');
     this.transport?.close();
     this.releaseTransport();
   }

@@ -1,7 +1,9 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="NewPGP">
-  <rect width="128" height="128" rx="28" fill="#4059d8"/>
-  <path d="M64 20 28 34v30c0 24 15 39 36 46 21-7 36-22 36-46V34L64 20Z" fill="#fff" opacity=".14"/>
-  <path d="M64 26 34 38v26c0 20 12 33 30 40 18-7 30-20 30-40V38L64 26Z" fill="none" stroke="#fff" stroke-width="6"/>
-  <circle cx="64" cy="62" r="13" fill="none" stroke="#fff" stroke-width="6"/>
-  <path d="M64 75v18" stroke="#fff" stroke-width="6" stroke-linecap="round"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128" role="img" aria-label="NewPGP">
+  <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+  <!-- Copyright (C) 2026 Vaibhav - https://github.com/thisisforlearn -->
+  <rect width="128" height="128" rx="28" fill="#2f46bd"/>
+  <path d="M64 16 100 30v28c0 20-11 34-27 41-16-7-27-21-27-41V30L64 16Z" fill="#fff" opacity=".12"/>
+  <path d="M64 23 35 35v23c0 18 10 30 25 37 15-7 25-19 25-37V35L64 23Z" fill="none" stroke="#fff" stroke-width="6" stroke-linejoin="round"/>
+  <circle cx="64" cy="59" r="10" fill="#fff"/>
+  <path d="M64 68v14" stroke="#fff" stroke-width="8" stroke-linecap="round"/>
 </svg>

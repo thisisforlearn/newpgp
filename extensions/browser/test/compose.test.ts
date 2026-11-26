@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Vaibhav - https://github.com/thisisforlearn
 import { describe, expect, it } from 'vitest';
-import { composeBody, describeMode } from '../src/composition/compose';
+import { composeBody, describeMode, hasCompleteArmor } from '../src/composition/compose';
 import { DEFAULT_SETTINGS, loadSettings, sanitizeSettings, saveSettings } from '../src/composition/settings';
 import { MockBridge, mockKey } from '../src/native/MockBridge';
 import { createMockBrowserApi } from './mocks/browser';
@@ -77,6 +77,45 @@ function draftFixture(): void {
   const api = createMockBrowserApi();
   expect(Object.keys(api.store)).toHaveLength(0);
 }
+
+describe('armor safety: never fall back to plaintext', () => {
+  const modes = ['send-both', 'pgp-only'] as const;
+  const complete = ARMOR;
+
+  for (const mode of modes) {
+    it(`${mode}: empty, whitespace and garbage armor all refuse to apply`, () => {
+      for (const armored of ['', '   ', '\n\t  \n', 'not an armor block', '-----BEGIN PGP ']) {
+        const result = composeBody({ draft: 'Secret meeting at 10', armored, mode });
+        expect(result.applied).toBe(false);
+        expect(result.body).toBe('Secret meeting at 10');
+        expect(result.body).not.toContain('-----BEGIN PGP MESSAGE-----');
+      }
+    });
+
+    it(`${mode}: missing END marker refuses to apply`, () => {
+      const armored = '-----BEGIN PGP MESSAGE-----\nQUJDRA==';
+      expect(composeBody({ draft: 'Secret', armored, mode }).applied).toBe(false);
+    });
+
+    it(`${mode}: a complete block still composes`, () => {
+      const result = composeBody({ draft: 'Secret', armored: complete, mode });
+      expect(result.applied).toBe(true);
+      expect(result.body).toContain('-----BEGIN PGP MESSAGE-----');
+    });
+  }
+
+  it('rejects non-string armor values without throwing', () => {
+    const result = composeBody({ draft: 'Secret', armored: undefined as unknown as string, mode: 'pgp-only' });
+    expect(result.applied).toBe(false);
+    expect(result.reason).toBe('missing-armor');
+  });
+
+  it('hasCompleteArmor requires both markers', () => {
+    expect(hasCompleteArmor(complete)).toBe(true);
+    expect(hasCompleteArmor('-----BEGIN PGP MESSAGE-----')).toBe(false);
+    expect(hasCompleteArmor(null)).toBe(false);
+  });
+});
 
 describe('key discovery data', () => {
   it('produces a deterministic safety number from a fingerprint', async () => {

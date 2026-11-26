@@ -14,6 +14,7 @@ const toggle = requireElement<HTMLInputElement>('#mode-toggle');
 const modeDescription = requireElement<HTMLElement>('#mode-description');
 const modeTradeoff = requireElement<HTMLElement>('#mode-tradeoff');
 const status = requireElement<HTMLElement>('#bridge-status');
+const settingsError = requireElement<HTMLElement>('#settings-error');
 const form = requireElement<HTMLFormElement>('#discover-form');
 const emailInput = requireElement<HTMLInputElement>('#email');
 const result = requireElement<HTMLElement>('#key-result');
@@ -72,13 +73,23 @@ async function init(): Promise<void> {
   }
 }
 
-toggle.addEventListener('change', () => {
+toggle.addEventListener('change', async () => {
+  const previous = settings;
   const next: Settings = {
     ...settings,
     sendMode: toggle.checked ? 'pgp-only' : 'send-both',
   };
   applyMode(next);
-  void callBackground(api, { type: 'SET_SETTINGS', settings: next });
+  settingsError.textContent = '';
+  const response = await callBackground(api, { type: 'SET_SETTINGS', settings: next });
+  if (!response.ok) {
+    // Never leave the UI claiming a mode that was not actually saved.
+    applyMode(previous);
+    const friendly = response.error;
+    settingsError.textContent = `Could not save that setting. ${
+      friendly ? `${friendly.title} ${friendly.message}` : 'Please try again.'
+    } Your previous choice was restored.`;
+  }
 });
 
 form.addEventListener('submit', (event) => {

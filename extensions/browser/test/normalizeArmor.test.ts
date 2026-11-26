@@ -145,6 +145,49 @@ describe('normalizeArmor', () => {
     expect(result.warnings.some((warning) => warning.includes('unfinished'))).toBe(true);
   });
 
+  it('drops a canonical CRC24 line instead of folding it into the ciphertext', () => {
+    const canonical = [
+      '-----BEGIN PGP MESSAGE-----',
+      'Version: NewPGP 0.1',
+      '',
+      'QUJDRA==',
+      '=AbCd',
+      '-----END PGP MESSAGE-----',
+    ].join('\n');
+    const result = normalizeArmor(canonical);
+    expect(result.found).toBe(true);
+    expect(result.armored).not.toContain('=AbCd');
+    expect(result.armored).toContain('QUJDRA==');
+    expect(armorBody(result.armored)).toBe('QUJDRA==');
+    expect(armorBody(canonical)).toBe('QUJDRA==');
+  });
+
+  it('keeps a CRC line intact through quoted-printable cleanup', () => {
+    const quoted = [
+      '> -----BEGIN PGP MESSAGE-----',
+      '> ',
+      '> QUJDRA==',
+      '> =AbCd',
+      '> -----END PGP MESSAGE-----',
+    ].join('\n');
+    const result = normalizeArmor(quoted);
+    expect(result.found).toBe(true);
+    expect(armorBody(result.armored)).toBe('QUJDRA==');
+    expect(result.armored).not.toContain('AbCd');
+  });
+
+  it('does not corrupt a long wrapped block followed by a checksum', () => {
+    const body = 'QUJDRA==QUJDRA==QUJDRA==QUJDRA==QUJDRA==QUJDRA==QUJDRA==QUJDRA==';
+    const canonical = [
+      '-----BEGIN PGP MESSAGE-----',
+      '',
+      ...body.match(/.{1,64}/g)!,
+      '=wXyZ',
+      '-----END PGP MESSAGE-----',
+    ].join('\n');
+    expect(armorBody(normalizeArmor(canonical).armored)).toBe(body);
+  });
+
   it('supports signature and public-key armor kinds', () => {
     const sig = '-----BEGIN PGP SIGNATURE-----\n\nQUJDRA==\n-----END PGP SIGNATURE-----';
     expect(normalizeArmor(sig).kind).toBe('PGP SIGNATURE');

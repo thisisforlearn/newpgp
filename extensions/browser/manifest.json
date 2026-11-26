@@ -4,19 +4,28 @@
   "version": "0.1.0",
   "description": "Add OpenPGP to Gmail and Outlook: send both plaintext and PGP by default, discover keys, and decrypt in place.",
   "icons": {
-    "128": "icon.svg"
+    "16": "icon16.png",
+    "32": "icon32.png",
+    "48": "icon48.png",
+    "128": "icon128.png"
   },
   "action": {
     "default_popup": "popup.html",
     "default_title": "NewPGP",
-    "default_icon": "icon.svg"
+    "default_icon": {
+      "16": "icon16.png",
+      "32": "icon32.png",
+      "48": "icon48.png",
+      "128": "icon128.png"
+    }
   },
   "options_ui": {
     "page": "options.html",
     "open_in_tab": true
   },
   "background": {
-    "service_worker": "background/service-worker.js"
+    "service_worker": "background/service-worker.js",
+    "scripts": ["background/service-worker.js"]
   },
   "content_scripts": [
     {
@@ -54,10 +63,16 @@
       ]
     }
   ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'"
+  },
   "browser_specific_settings": {
     "gecko": {
       "id": "newpgp@newpgp.local",
-      "strict_min_version": "115.0"
+      "strict_min_version": "142.0",
+      "data_collection_permissions": {
+        "required": ["none"]
+      }
     }
   }
 }
