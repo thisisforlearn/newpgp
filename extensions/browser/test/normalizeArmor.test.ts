@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Vaibhav - https://github.com/thisisforlearn
+import { Buffer } from 'node:buffer';
 import { describe, expect, it } from 'vitest';
 import {
   armorBody,
@@ -187,6 +188,34 @@ describe('normalizeArmor', () => {
     ].join('\n');
     expect(armorBody(normalizeArmor(canonical).armored)).toBe(body);
   });
+
+  it('leaves a CRC line alone after a base64 line ending in a single =', () => {
+    // A singly-padded body line looks exactly like a quoted-printable soft
+    // break; the following checksum must still be treated as armor data.
+    expect(decodeQuotedPrintable('QUJDRA=\n=AbCd\n')).toBe('QUJDRA=\n=AbCd\n');
+  });
+
+  it.each([100, 101, 102, 104, 105])(
+    'does not fold a canonical CRC into a %i-byte body',
+    (byteLength) => {
+      const bytes = Uint8Array.from({ length: byteLength }, (_, index) => index % 251);
+      const body = Buffer.from(bytes).toString('base64');
+      const crc = '=AbCd';
+      const canonical = [
+        '-----BEGIN PGP MESSAGE-----',
+        '',
+        ...(body.match(/.{1,64}/g) ?? []),
+        crc,
+        '-----END PGP MESSAGE-----',
+      ].join('\n');
+
+      const result = normalizeArmor(canonical);
+      expect(result.found).toBe(true);
+      expect(armorBody(result.armored)).toBe(body);
+      expect(result.armored).not.toContain(crc);
+      expect(result.armored).toContain('-----END PGP MESSAGE-----');
+    },
+  );
 
   it('supports signature and public-key armor kinds', () => {
     const sig = '-----BEGIN PGP SIGNATURE-----\n\nQUJDRA==\n-----END PGP SIGNATURE-----';

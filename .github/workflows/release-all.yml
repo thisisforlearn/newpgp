@@ -9,8 +9,10 @@
 #     (download-artifact can read another run's artifacts with `run-id`,
 #     `repository` and `github-token`).
 #   * Publication is gated on ALL three required builds having a SUCCESSFUL,
-#     artifact-producing run for the tagged SHA, and on the downloaded asset
-#     groups being non-empty. Failed builds or zero assets => no release.
+#     artifact-producing run for the tagged SHA, on Rust CI (fmt, clippy,
+#     tests on 3 OS, audit, cargo-deny) having a SUCCESSFUL run for that SHA,
+#     and on the downloaded asset groups being non-empty. Failed builds,
+#     failed Rust CI or zero assets => no release.
 #   * Browser Extension is not tag-triggered; its package comes from the most
 #     recent successful push run on main and is optional.
 #   * `concurrency` keyed by commit SHA serialises the near-simultaneous
@@ -29,6 +31,7 @@ on:
       - Desktop Release
       - CLI Binaries
       - Android APK
+      - Rust
       - Browser Extension
     types: [completed]
 
@@ -65,6 +68,7 @@ jobs:
           cli_run=""
           android_run=""
           ext_run=""
+          ci_run=""
           ready=false
 
           # Always emit all outputs, including on the early (skip) paths.
@@ -76,6 +80,7 @@ jobs:
               echo "cli_run=$cli_run"
               echo "android_run=$android_run"
               echo "ext_run=$ext_run"
+              echo "ci_run=$ci_run"
             } >> "$GITHUB_OUTPUT"
             exit 0
           }
@@ -110,12 +115,12 @@ jobs:
           fi
           echo "Resolved release tag: $tag (from $TRIGGER_NAME)"
 
-          # The first completed workflow triggers us; the other tag builds may
-          # still be queued/in progress. Wait until all three have a completed
-          # run for this SHA (bounded at ~20 minutes).
+          # The first completed workflow triggers us; the other tag builds and
+          # Rust CI may still be queued/in progress. Wait until all four have a
+          # completed run for this SHA (bounded at ~20 minutes).
           for attempt in $(seq 1 40); do
             status_lines="$(gh api "repos/$repo/actions/runs?head_sha=$HEAD_SHA&per_page=100" --jq '
-              ["Desktop Release", "CLI Binaries", "Android APK"] as $names
+              ["Desktop Release", "CLI Binaries", "Android APK", "Rust"] as $names
               | $names[] as $name
               | [.workflow_runs[] | select(.name == $name)] as $runs
               | [$name,
@@ -131,17 +136,19 @@ jobs:
                 completed_workflows=$((completed_workflows + 1))
               fi
             done <<< "$status_lines"
-            if [ "$pending" -eq 0 ] && { [ "$completed_workflows" -eq 3 ] || [ "$attempt" -ge 8 ]; }; then
+            if [ "$pending" -eq 0 ] && { [ "$completed_workflows" -eq 4 ] || [ "$attempt" -ge 8 ]; }; then
               break
             fi
-            echo "Waiting for required release builds (pending=$pending, completed=$completed_workflows/3, attempt=$attempt/40)..."
+            echo "Waiting for required release checks (pending=$pending, completed=$completed_workflows/4, attempt=$attempt/40)..."
             sleep 30
           done
 
-          # Resolve one successful, artifact-producing run per required
+          # Resolve one successful, artifact-producing run per required build
           # workflow for the tagged SHA. A failed or artifact-less build gives
-          # an empty ID and blocks publication below. The extension has no tag
-          # trigger, so use its latest successful push run on main (optional).
+          # an empty ID and blocks publication below. Rust CI does not upload
+          # artifacts, so only a successful run for the tagged SHA is required
+          # for that gate. The extension has no tag trigger, so use its latest
+          # successful push run on main (optional).
           resolve_run() {
             local scope="$1" name="$2" sha="$3" ids candidate count
             if [ "$scope" = "sha" ]; then
@@ -150,6 +157,13 @@ jobs:
             else
               ids="$(gh api "repos/$repo/actions/runs?event=push&branch=main&status=completed&per_page=100" \
                 --jq "[.workflow_runs[] | select(.name == \"$name\" and .conclusion == \"success\") | .id] | .[]" 2>/dev/null || true)"
+            fi
+            if [ "$name" = "Rust" ]; then
+              for candidate in $ids; do
+                echo "$candidate"
+                return 0
+              done
+              return 0
             fi
             for candidate in $ids; do
               count="$(gh api "repos/$repo/actions/runs/$candidate/artifacts?per_page=100" \
@@ -166,21 +180,24 @@ jobs:
           cli_run="$(resolve_run sha 'CLI Binaries' "$HEAD_SHA")"
           android_run="$(resolve_run sha 'Android APK' "$HEAD_SHA")"
           ext_run="$(resolve_run push 'Browser Extension' '')"
-          echo "Source runs: desktop=$desktop_run cli=$cli_run android=$android_run extension=$ext_run"
+          ci_run="$(resolve_run sha 'Rust' "$HEAD_SHA")"
+          echo "Source runs: desktop=$desktop_run cli=$cli_run android=$android_run extension=$ext_run ci=$ci_run"
 
           # Aggregation gate: never publish when a required build failed or
-          # produced no artifacts for the tagged commit.
+          # produced no artifacts for the tagged commit, or when Rust CI did
+          # not complete successfully for that commit.
           missing=""
           [ -n "$desktop_run" ] || missing="$missing Desktop Release"
           [ -n "$cli_run" ] || missing="$missing CLI Binaries"
           [ -n "$android_run" ] || missing="$missing Android APK"
+          [ -n "$ci_run" ] || missing="$missing Rust CI"
           if [ -n "$missing" ]; then
-            echo "::notice title=Release skipped::No successful, artifact-producing run for $HEAD_SHA:$missing. Required builds failed or produced no artifacts; not publishing."
+            echo "::notice title=Release skipped::No successful run for $HEAD_SHA:$missing. Required builds failed, produced no artifacts, or Rust CI failed; not publishing."
             finish
           fi
 
           ready=true
-          echo "All required builds succeeded with artifacts for $HEAD_SHA."
+          echo "All required builds succeeded with artifacts and Rust CI passed for $HEAD_SHA."
           finish
 
       - name: Download desktop artifacts

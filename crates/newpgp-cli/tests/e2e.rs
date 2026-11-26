@@ -965,3 +965,305 @@ fn encrypt_accepts_a_fingerprint_as_a_recipient() {
         );
     }
 }
+
+/// A key created with a password must be usable for signing. Compose always
+/// signs, so `compose --password` is the regression case for the bug where a
+/// hardcoded empty signer password made signing fail with "invalid input".
+#[test]
+fn protected_key_signs_compose_with_password() {
+    let alice = Home::new("protected-compose-alice");
+    let bob = Home::new("protected-compose-bob");
+    let password = "open sesame";
+
+    // Alice protects her key with a password at creation time.
+    let alice_out = alice.ok(&[
+        "init",
+        "--name",
+        "Alice Example",
+        "--email",
+        "alice@example.com",
+        "--password",
+        password,
+    ]);
+    assert!(
+        alice_out.contains("Keep your password safe"),
+        "init should warn about the password: {alice_out}"
+    );
+    let alice_fp = fingerprint(&alice_out);
+    assert_eq!(alice_fp.len(), 40);
+
+    // Bob has an ordinary unprotected key.
+    init(&bob, "Bob Example", "bob@example.com");
+
+    // Exchange public keys exactly as two users would.
+    let alice_key = bob.file("alice.asc");
+    let bob_key = alice.file("bob.asc");
+    export_public_key(&alice, &alice_key);
+    export_public_key(&bob, &bob_key);
+    bob.ok(&[
+        "key",
+        "import",
+        "alice@example.com",
+        alice_key.to_str().unwrap(),
+    ]);
+    alice.ok(&[
+        "key",
+        "import",
+        "bob@example.com",
+        bob_key.to_str().unwrap(),
+    ]);
+
+    // Encrypt to the protected key from another home. Receiving a message
+    // does not need Alice's password, but decrypting it does.
+    fs::write(bob.file("for-alice.txt"), b"secret for Alice").expect("write plaintext");
+    bob.ok(&[
+        "encrypt",
+        "-r",
+        "alice@example.com",
+        "-f",
+        bob.file("for-alice.txt").to_str().unwrap(),
+        "-o",
+        bob.file("for-alice.bin").to_str().unwrap(),
+    ]);
+    let dec = alice.ok(&[
+        "decrypt",
+        "-f",
+        bob.file("for-alice.bin").to_str().unwrap(),
+        "-o",
+        alice.file("for-alice.dec.txt").to_str().unwrap(),
+        "--password",
+        password,
+    ]);
+    assert!(
+        dec.contains("Decrypted to"),
+        "decrypting with the right password failed: {dec}"
+    );
+    assert_eq!(
+        fs::read(alice.file("for-alice.dec.txt")).expect("read decrypted"),
+        b"secret for Alice"
+    );
+
+    // Compose from the protected key. Compose always signs, so this used to
+    // fail without a signer password.
+    let composed = alice.ok(&[
+        "compose",
+        "--body",
+        "signed reply from Alice",
+        "-r",
+        "bob@example.com",
+        "--password",
+        password,
+    ]);
+    let block = armor_block(&composed, "MESSAGE");
+    assert!(
+        block.starts_with("-----BEGIN PGP MESSAGE-----")
+            && block.ends_with("-----END PGP MESSAGE-----"),
+        "compose should produce a PGP message block: {composed}"
+    );
+
+    // The block is a real signed message: Bob can decrypt it and verify the
+    // signature made by Alice's protected key.
+    fs::write(bob.file("reply.asc"), &block).expect("write composed block");
+    let verified = bob.ok(&[
+        "decrypt",
+        "-f",
+        bob.file("reply.asc").to_str().unwrap(),
+        "-o",
+        bob.file("reply.dec.txt").to_str().unwrap(),
+    ]);
+    assert!(
+        verified.contains("Signature: Verified"),
+        "composed signature should verify: {verified}"
+    );
+    let reply = fs::read_to_string(bob.file("reply.dec.txt")).expect("read decrypted reply");
+    assert!(
+        reply.contains("signed reply from Alice"),
+        "decrypted body should contain the composed text: {reply}"
+    );
+}
+
+/// `encrypt --sign` must use the same password that protected the key.
+#[test]
+fn protected_key_signs_encrypt_with_password() {
+    let alice = Home::new("protected-encrypt-alice");
+    let bob = Home::new("protected-encrypt-bob");
+    let password = "open sesame";
+
+    let alice_out = alice.ok(&[
+        "init",
+        "--name",
+        "Alice Example",
+        "--email",
+        "alice@example.com",
+        "--password",
+        password,
+    ]);
+    assert!(alice_out.contains("Keep your password safe"), "{alice_out}");
+    init(&bob, "Bob Example", "bob@example.com");
+
+    let alice_key = bob.file("alice.asc");
+    let bob_key = alice.file("bob.asc");
+    export_public_key(&alice, &alice_key);
+    export_public_key(&bob, &bob_key);
+    bob.ok(&[
+        "key",
+        "import",
+        "alice@example.com",
+        alice_key.to_str().unwrap(),
+    ]);
+    alice.ok(&[
+        "key",
+        "import",
+        "bob@example.com",
+        bob_key.to_str().unwrap(),
+    ]);
+
+    let input = alice.file("signed.txt");
+    let encrypted = alice.file("signed.txt.pgp");
+    let decrypted = bob.file("signed.dec.txt");
+    fs::write(&input, b"sign this with a protected key").expect("write plaintext");
+
+    // Signing without the password used to fail with "invalid input".
+    let locked = alice.run(&[
+        "encrypt",
+        "-r",
+        "bob@example.com",
+        "-f",
+        input.to_str().unwrap(),
+        "-o",
+        encrypted.to_str().unwrap(),
+        "--sign",
+    ]);
+    assert!(
+        !locked.status.success(),
+        "signing a protected key without a password must fail"
+    );
+
+    let out = alice.ok(&[
+        "encrypt",
+        "-r",
+        "bob@example.com",
+        "-f",
+        input.to_str().unwrap(),
+        "-o",
+        encrypted.to_str().unwrap(),
+        "--sign",
+        "--password",
+        password,
+    ]);
+    assert!(out.contains("Encrypted"), "output: {out}");
+    let verified = bob.ok(&[
+        "decrypt",
+        "-f",
+        encrypted.to_str().unwrap(),
+        "-o",
+        decrypted.to_str().unwrap(),
+    ]);
+    assert!(
+        verified.contains("Signature: Verified"),
+        "signature should verify: {verified}"
+    );
+    assert_eq!(
+        fs::read(&decrypted).expect("read decrypted file"),
+        b"sign this with a protected key"
+    );
+}
+
+/// The bridge must use a caller-supplied passphrase when signing during
+/// `encrypt`. It must not try to guess one from the environment or the browser
+/// extension: an explicitly supplied `passphrase` (or the `password` alias)
+/// unlocks the signer, and no passphrase means signing fails.
+#[test]
+fn bridge_encrypt_uses_caller_supplied_passphrase_for_signing() {
+    let home = Home::new("bridge-encrypt-passphrase");
+    let email = "locked@example.com";
+    let passphrase = "correct horse battery staple";
+
+    let output = bridge_exchange(
+        &home,
+        &[json!({
+            "id": "1",
+            "method": "generateKey",
+            "params": { "name": "Locked User", "email": email, "passphrase": passphrase }
+        })],
+    );
+    let frames = parse_frames(&output.stdout);
+    assert_eq!(frames[0]["ok"].as_bool(), Some(true), "{}", frames[0]);
+
+    // Both documented spellings of the passphrase unlock signing.
+    for (index, key) in ["passphrase", "password"].into_iter().enumerate() {
+        let mut params = json!({
+            "plaintext": "a signed secret",
+            "recipients": [email],
+            "sign": true
+        });
+        params[key] = json!(passphrase);
+        let output = bridge_exchange(
+            &home,
+            &[json!({
+                "id": format!("{}", index + 2),
+                "method": "encrypt",
+                "params": params
+            })],
+        );
+        let frames = parse_frames(&output.stdout);
+        assert_eq!(
+            frames[0]["ok"].as_bool(),
+            Some(true),
+            "encrypt with {key} should succeed: {}",
+            frames[0]
+        );
+        let armored = frames[0]["result"]["armored"].as_str().unwrap_or_default();
+        assert!(
+            armored.contains("-----BEGIN PGP MESSAGE-----"),
+            "encrypt should return an armored message: {armored}"
+        );
+
+        // The message is genuinely signed by the protected key: the bridge
+        // reports a verified signature when the same passphrase is supplied.
+        let decrypted = bridge_exchange(
+            &home,
+            &[json!({
+                "id": "verify",
+                "method": "decrypt",
+                "params": { "armored": armored, "passphrase": passphrase }
+            })],
+        );
+        let frames = parse_frames(&decrypted.stdout);
+        assert_eq!(frames[0]["ok"].as_bool(), Some(true), "{}", frames[0]);
+        assert_eq!(
+            frames[0]["result"]["signature"].as_str(),
+            Some("verified"),
+            "the bridge encrypt signature should verify: {}",
+            frames[0]
+        );
+    }
+
+    // Without an explicit passphrase the protected signer stays locked, and
+    // the bridge reports a failure rather than silently sending an empty one.
+    let locked = bridge_exchange(
+        &home,
+        &[json!({
+            "id": "no-password",
+            "method": "encrypt",
+            "params": {
+                "plaintext": "a signed secret",
+                "recipients": [email],
+                "sign": true
+            }
+        })],
+    );
+    let frames = parse_frames(&locked.stdout);
+    assert_eq!(
+        frames[0]["ok"].as_bool(),
+        Some(false),
+        "signing a protected key without a passphrase must fail: {}",
+        frames[0]
+    );
+    assert_eq!(
+        frames[0]["error"]["code"].as_str(),
+        Some("DECRYPT_FAILED"),
+        "{}",
+        frames[0]
+    );
+}

@@ -128,11 +128,15 @@ export function decodeQuotedPrintable(input: string): string {
  * A trailing `=` is ambiguous: it can be a quoted-printable soft break OR
  * base64 padding. Only treat it as a soft break when the following line
  * actually looks like a continuation of the base64 body — never when the next
- * line is an armor footer or an armor header.
+ * line is an armor footer, an armor header, or the CRC checksum line.
  */
 function isSoftBreak(line: string, nextLine: string): boolean {
   if (line.endsWith('==')) return false;
   const next = nextLine.trim();
+  // A canonical armor checksum starts with '=' but is NOT a quoted-printable
+  // continuation. Folding it into the body would corrupt the ciphertext when
+  // the last base64 line ends in a single '=' (payload length ≡ 2 mod 3).
+  if (CRC_LINE.test(next)) return false;
   if (next.length === 0) return false;
   if (next.startsWith('-----')) return false;
   if (/^[A-Za-z][A-Za-z0-9-]*: /.test(next)) return false;

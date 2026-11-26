@@ -76,6 +76,12 @@ enum Command {
         output: Option<PathBuf>,
         #[arg(long)]
         sign: bool,
+        /// Password for your key. Only needed when --sign uses a protected
+        /// key; unprotected keys need no password. Prefer the
+        /// NEWPGP_KEY_PASSWORD environment variable so the secret never
+        /// appears in shell history or the process list.
+        #[arg(long, env = "NEWPGP_KEY_PASSWORD", default_value = "")]
+        password: String,
         #[arg(long, help = "Use RFC 9580 AEAD (newer clients only)")]
         aead: bool,
     },
@@ -96,6 +102,12 @@ enum Command {
         recipients: Vec<String>,
         #[arg(long, value_enum, default_value_t = ModeArg::Both)]
         mode: ModeArg,
+        /// Password for your key. Compose always signs, so a protected key
+        /// needs this to unlock signing; unprotected keys need no password.
+        /// Prefer the NEWPGP_KEY_PASSWORD environment variable so the secret
+        /// never appears in shell history or the process list.
+        #[arg(long, env = "NEWPGP_KEY_PASSWORD", default_value = "")]
+        password: String,
     },
     /// Search decrypted mail locally.
     Search {
@@ -296,6 +308,7 @@ async fn run(cli: &Cli, home: &Path) -> Result<()> {
             file,
             output,
             sign,
+            password,
             aead,
         } => {
             let identity = load_identity(home)?;
@@ -310,7 +323,7 @@ async fn run(cli: &Cli, home: &Path) -> Result<()> {
                 EncryptionProfile::Compatible
             };
             let signer = if *sign {
-                Some((&identity.secret, ""))
+                Some((&identity.secret, password.as_str()))
             } else {
                 None
             };
@@ -345,6 +358,7 @@ async fn run(cli: &Cli, home: &Path) -> Result<()> {
             body,
             recipients,
             mode,
+            password,
         } => {
             let identity = load_identity(home)?;
             let ring = load_keyring(home)?;
@@ -357,7 +371,7 @@ async fn run(cli: &Cli, home: &Path) -> Result<()> {
                 subject: "",
                 from_addr: "",
                 recipients: &certs,
-                signer: Some((&identity.secret, "")),
+                signer: Some((&identity.secret, password.as_str())),
                 mode: (*mode).into(),
                 prefer_encrypt_mutual: false,
                 profile: EncryptionProfile::Compatible,
@@ -698,8 +712,10 @@ fn param<'a>(params: &'a Value, name: &str) -> &'a str {
     params.get(name).and_then(Value::as_str).unwrap_or("")
 }
 
-/// A key password supplied by the extension. `password` is accepted as a
+/// A key password supplied by a bridge caller. `password` is accepted as a
 /// friendly alias for older callers, but `passphrase` is the documented field.
+/// This is only used when a caller explicitly provides it: the browser
+/// extension must never send the key password on its own.
 fn bridge_passphrase(params: &Value) -> &str {
     let value = param(params, "passphrase");
     if value.is_empty() {
@@ -786,8 +802,11 @@ async fn handle_bridge(home: &Path, request: BridgeRequest) -> Value {
                     Err(_) => return fail(id, "NO_KEY", &format!("No key found for {value}")),
                 }
             }
+            // Signing a protected key needs its password, but only callers
+            // that explicitly supply one can unlock it. The browser extension
+            // never sends the password automatically.
             let signer = if params.get("sign").and_then(Value::as_bool).unwrap_or(false) {
-                Some((&identity.secret, ""))
+                Some((&identity.secret, bridge_passphrase(params)))
             } else {
                 None
             };

@@ -8,8 +8,24 @@
  * `browser.*` (Firefox) satisfy it, and tests supply a mock implementation.
  */
 
+/** Sender metadata that WebExtensions supplies alongside a runtime message. */
+export interface MessageSender {
+  id?: string;
+  url?: string;
+  tab?: { id?: number; url?: string };
+}
+
+/** Chrome-compatible reply callback for a `runtime.onMessage` listener. */
+export type SendResponse = (response?: unknown) => void;
+
+/**
+ * A WebExtensions listener. Runtime messages are answered through
+ * `sendResponse`; returning `true` keeps the message channel open for an
+ * asynchronous reply. Promise-returning listeners only work from Chrome 148,
+ * so extension code must never rely on them.
+ */
 export interface BrowserListener<T = unknown> {
-  (value: T): void;
+  (value: T, sender?: MessageSender, sendResponse?: SendResponse): boolean | void;
 }
 
 export interface BrowserEvent<T = unknown> {

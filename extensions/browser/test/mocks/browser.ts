@@ -5,7 +5,9 @@ import type {
   BrowserEvent,
   BrowserListener,
   BrowserStorageArea,
+  MessageSender,
   NativePort,
+  SendResponse,
 } from '../../src/platform/browser';
 
 export class MockEvent<T = unknown> implements BrowserEvent<T> {
@@ -19,17 +21,32 @@ export class MockEvent<T = unknown> implements BrowserEvent<T> {
     this.listeners.delete(listener);
   }
 
-  emit(value: T): void {
-    for (const listener of [...this.listeners]) listener(value);
+  emit(value: T, sender?: MessageSender): void {
+    for (const listener of [...this.listeners]) listener(value, sender);
   }
 
-  async emitAsync(value: T, sender?: unknown): Promise<unknown> {
-    let result: unknown;
+  /**
+   * Mimic `runtime.sendMessage` the way Chrome actually behaves: the listener
+   * answers through `sendResponse`, synchronously or (after returning `true`)
+   * asynchronously. We deliberately do not resolve from the listener's return
+   * value, because Chrome versions before 148 ignore Promise replies.
+   */
+  async emitAsync(value: T, sender?: MessageSender): Promise<unknown> {
     for (const listener of [...this.listeners]) {
-      result = await (listener as (value: T, sender?: unknown) => unknown)(value, sender);
-      if (result !== undefined) break;
+      let resolveReply: (value: unknown) => void = () => undefined;
+      const replied = new Promise<unknown>((resolve) => {
+        resolveReply = resolve;
+      });
+      let hasReplied = false;
+      const sendResponse: SendResponse = (response) => {
+        hasReplied = true;
+        resolveReply(response);
+      };
+
+      const keepChannelOpen = listener(value, sender, sendResponse);
+      if (hasReplied || keepChannelOpen === true) return await replied;
     }
-    return result;
+    return undefined;
   }
 }
 
@@ -47,7 +64,7 @@ export interface MockBrowserOptions {
 export interface MockBrowserApi extends BrowserApi {
   ports: MockNativePort[];
   connectedHosts: string[];
-  emitRuntimeMessage(message: unknown, sender?: unknown): Promise<unknown>;
+  emitRuntimeMessage(message: unknown, sender?: MessageSender): Promise<unknown>;
   store: Record<string, unknown>;
 }
 

@@ -76,6 +76,8 @@ export interface EncryptParams {
   plaintext: string;
   recipients: string[];
   sign?: boolean;
+  /** Reserved for the upcoming passphrase UI; never persisted by the extension. */
+  passphrase?: string;
 }
 
 export interface EncryptResult {
@@ -167,7 +169,7 @@ export interface Settings {
 export type RuntimeMessage =
   | { type: 'PING' }
   | { type: 'DISCOVER_KEY'; email: string }
-  | { type: 'ENCRYPT'; plaintext: string; recipients: string[] }
+  | { type: 'ENCRYPT'; plaintext: string; recipients: string[]; passphrase?: string }
   | { type: 'DECRYPT_ARMORED'; armored: string }
   | { type: 'GET_SETTINGS' }
   | { type: 'SET_SETTINGS'; settings: Settings };

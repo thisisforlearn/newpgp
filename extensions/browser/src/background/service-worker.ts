@@ -9,7 +9,7 @@ import { loadSettings, saveSettings } from '../composition/settings';
 import { normalizeArmor } from '../crypto/normalizeArmor';
 import { toFriendlyError } from '../native/errors';
 import { NativeMessagingClient } from '../native/NativeMessagingClient';
-import { getBrowserApi } from '../platform/browser';
+import { getBrowserApi, type MessageSender, type SendResponse } from '../platform/browser';
 import { fail, ok, type RuntimeResult } from '../messages';
 import type { RuntimeMessage, Settings } from '../types';
 
@@ -45,7 +45,13 @@ async function handle(message: RuntimeMessage): Promise<RuntimeResult<unknown>> 
       const result = await bridge.encrypt({
         plaintext: message.plaintext,
         recipients: message.recipients,
-        sign: true,
+        // The shipped CLI/bridge signs with an empty password, so signing a
+        // message with a password-protected key fails the whole encryption.
+        // Disable signing until passphrase plumbing and a UI exist. This only
+        // drops the signature; the plaintext still goes solely to our native
+        // host and is never logged or persisted.
+        sign: false,
+        ...(message.passphrase === undefined ? {} : { passphrase: message.passphrase }),
       });
       // The mode is applied by the content script, which keeps the draft in
       // memory. We return it here so there is a single source of truth.
@@ -79,22 +85,35 @@ async function handle(message: RuntimeMessage): Promise<RuntimeResult<unknown>> 
   }
 }
 
-interface MessageSender {
-  id?: string;
-  url?: string;
-}
+api.runtime.onMessage.addListener((raw: unknown, sender?: MessageSender, sendResponse?: SendResponse) => {
+  const reply = (value: unknown): void => sendResponse?.(value);
 
-api.runtime.onMessage.addListener((raw: unknown, sender?: MessageSender) => {
   // Only our own extension may drive the bridge. A foreign sender id must
   // never be able to ask us to encrypt/decrypt on its behalf.
   if (sender?.id && api.runtime.id && sender.id !== api.runtime.id) {
-    return fail({
-      title: 'Request not accepted',
-      message: 'NewPGP only answers requests from its own extension pages.',
-    });
+    reply(
+      fail({
+        title: 'Request not accepted',
+        message: 'NewPGP only answers requests from its own extension pages.',
+      }),
+    );
+    return false;
   }
-  if (typeof raw !== 'object' || raw === null) return undefined;
+  if (typeof raw !== 'object' || raw === null) {
+    reply(undefined);
+    return false;
+  }
   const message = raw as RuntimeMessage;
-  if (typeof message.type !== 'string') return undefined;
-  return handle(message).catch((error: unknown) => fail(toFriendlyError(error)));
+  if (typeof message.type !== 'string') {
+    reply(undefined);
+    return false;
+  }
+
+  // Chrome only supports Promise replies from version 148 onwards, which is
+  // still rolling out. Answer through sendResponse instead and keep the
+  // message channel open while the async handler is running.
+  void handle(message)
+    .then((result) => reply(result))
+    .catch((error: unknown) => reply(fail(toFriendlyError(error))));
+  return true;
 });
