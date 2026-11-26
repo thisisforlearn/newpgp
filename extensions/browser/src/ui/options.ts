@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Vaibhav - https://github.com/thisisforlearn
 /** Options page: defaults, privacy notes and the native-host setup guide. */
 
-import { DEFAULT_SETTINGS } from '../composition/settings';
+import { clearSetupComplete, DEFAULT_SETTINGS } from '../composition/settings';
 import { describeMode } from '../composition/compose';
 import { callBackground } from '../messages';
 import { getBrowserApi } from '../platform/browser';
@@ -16,6 +16,8 @@ const autosaveToggle = requireElement<HTMLInputElement>('#autosave-toggle');
 const modeDescription = requireElement<HTMLElement>('#mode-description');
 const saved = requireElement<HTMLElement>('#saved-status');
 const settingsError = requireElement<HTMLElement>('#settings-error');
+const reopenSetup = requireElement<HTMLButtonElement>('#reopen-setup');
+const setupResetStatus = requireElement<HTMLElement>('#setup-reset-status');
 
 let settings: Settings = { ...DEFAULT_SETTINGS };
 
@@ -54,6 +56,17 @@ enabledToggle.addEventListener('change', () => {
 
 autosaveToggle.addEventListener('change', () => {
   void persist({ ...settings, autosaveAcknowledged: autosaveToggle.checked });
+});
+
+reopenSetup.addEventListener('click', () => {
+  void clearSetupComplete(api).then(
+    () => {
+      setupResetStatus.textContent = 'Setup will show again next time you open the popup.';
+    },
+    () => {
+      setupResetStatus.textContent = 'Could not reset setup. Please try again.';
+    },
+  );
 });
 
 void callBackground<Settings>(api, { type: 'GET_SETTINGS' }).then((response) => {

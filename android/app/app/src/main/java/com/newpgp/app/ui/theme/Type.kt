@@ -11,5 +11,6 @@ import androidx.compose.ui.unit.sp
 val NewPgpTypography = Typography(
     headlineMedium = TextStyle(fontWeight = FontWeight.SemiBold, fontSize = 26.sp),
     titleLarge = TextStyle(fontWeight = FontWeight.SemiBold, fontSize = 20.sp),
-    bodyLarge = TextStyle(fontWeight = FontWeight.Normal, fontSize = 16.sp),
+    // 18sp minimum keeps body copy readable for non-technical users.
+    bodyLarge = TextStyle(fontWeight = FontWeight.Normal, fontSize = 18.sp),
 )

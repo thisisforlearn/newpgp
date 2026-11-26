@@ -17,7 +17,7 @@ const COPY: Record<BridgeErrorCode, FriendlyError> = {
   NATIVE_HOST_NOT_FOUND: {
     title: "The NewPGP helper isn't installed",
     message: 'We could not find the NewPGP helper on this computer, so no encryption happened.',
-    hint: 'Install the NewPGP desktop app (or CLI daemon), then reload the extension. Your message is still here.',
+    hint: 'Install the local helper from native-host/install.ps1 (Windows) or install.sh (macOS/Linux), then reload the extension. The browser starts it automatically when needed. Your message is still here.',
   },
   BRIDGE_DISCONNECTED: {
     title: 'The NewPGP helper disconnected',

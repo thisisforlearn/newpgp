@@ -12,6 +12,20 @@
       <div id="key-status" class="status-pill">Checking your key…</div>
     </header>
 
+    <div id="error-banner" class="error-banner" role="alert" hidden>
+      <div class="error-banner-text">
+        <strong>Something went wrong.</strong>
+        <span>Try again in a moment. If it keeps happening, we can help.</span>
+        <span>Write to <a href="mailto:nekomeowpurr@proton.me">nekomeowpurr@proton.me</a> or visit
+          <a href="https://github.com/thisisforlearn/newpgp" target="_blank" rel="noopener noreferrer">https://github.com/thisisforlearn/newpgp</a>.</span>
+        <details>
+          <summary>Technical detail (for helpers)</summary>
+          <pre id="error-banner-detail"></pre>
+        </details>
+      </div>
+      <button id="error-banner-close" class="banner-close" type="button" aria-label="Dismiss this message">Close</button>
+    </div>
+
     <nav class="tabs" role="tablist">
       <button data-tab="compose" class="active">Write</button>
       <button data-tab="keys">Keys &amp; people</button>
@@ -98,8 +112,64 @@
           </ul>
           <p class="muted">NewPGP is not a new cryptographic protocol. It uses rPGP, a pure-Rust OpenPGP implementation.</p>
         </div>
+        <div class="card">
+          <h1>Help</h1>
+          <p class="muted">Short guides in plain words. No technical knowledge needed.</p>
+          <ul class="help-links">
+            <li><a href="GETTING_STARTED.md" target="_blank" rel="noopener noreferrer">Getting started — how to send your first private message</a></li>
+            <li><a href="https://github.com/thisisforlearn/newpgp" target="_blank" rel="noopener noreferrer">The NewPGP project page — news and a place to ask questions</a></li>
+          </ul>
+          <p class="muted">Want a real person? Write to <a href="mailto:nekomeowpurr@proton.me">nekomeowpurr@proton.me</a>.</p>
+          <button id="help-revisit" type="button">See the setup steps again</button>
+        </div>
       </section>
     </main>
+
+    <div id="wizard" class="wizard" role="dialog" aria-modal="true" aria-labelledby="wizard-title" hidden>
+      <div class="wizard-card">
+        <p class="wizard-eyebrow">Welcome to NewPGP</p>
+        <p id="wizard-progress" class="wizard-progress">Step 1 of 3 — about 5 minutes in total</p>
+        <h1 id="wizard-title">Make your key</h1>
+
+        <section id="wizard-step-1" class="wizard-step">
+          <p class="wizard-lead">This is like a key only you keep. We never send it anywhere.</p>
+          <label for="wizard-name">Your name</label>
+          <p id="wizard-name-help" class="field-help">So people know whose key this is. Any name you like will do.</p>
+          <input id="wizard-name" type="text" autocomplete="name" placeholder="Your name" aria-label="Your name" aria-describedby="wizard-name-help" />
+          <label for="wizard-email">Your email</label>
+          <p id="wizard-email-help" class="field-help">The email address you want this key to belong to.</p>
+          <input id="wizard-email" type="email" autocomplete="email" placeholder="you@example.com" aria-label="Your email" aria-describedby="wizard-email-help" />
+          <label for="wizard-password">Password <span class="muted">(optional)</span></label>
+          <p id="wizard-password-help" class="field-help">You can leave this empty — we'll make a backup code instead.</p>
+          <input id="wizard-password" type="password" autocomplete="new-password" placeholder="Leave empty if you like" aria-label="Password, optional" aria-describedby="wizard-password-help" />
+          <button id="wizard-create" class="primary wizard-big" type="button">Create my key</button>
+          <p id="wizard-hint" class="wizard-hint" role="status" aria-live="polite"></p>
+          <p class="what-next">What happens next: we show your key, then help you write your first private message.</p>
+        </section>
+
+        <section id="wizard-step-2" class="wizard-step" hidden>
+          <p class="wizard-lead">Your key is ready. It stays on this device.</p>
+          <p class="field-help">This is your safety number. Share this only if someone wants to check it by phone.</p>
+          <pre id="wizard-fingerprint" class="wizard-fingerprint" aria-label="Your safety number"></pre>
+          <button id="wizard-copy" class="primary wizard-big" type="button">Copy my public key</button>
+          <p class="field-help">Your public key is safe to share. It lets people write privately to you.</p>
+          <button id="wizard-next" class="wizard-big" type="button">Next: write a message</button>
+          <p class="what-next">What happens next: we open the Write page with an example you can try.</p>
+        </section>
+
+        <section id="wizard-step-3" class="wizard-step" hidden>
+          <p class="wizard-lead">Send your first private message.</p>
+          <p class="field-help">A sample is ready for you. One click fills it in and puts your cursor in the message box.</p>
+          <button id="wizard-example" class="wizard-big" type="button">Try an example</button>
+          <button id="wizard-start" class="primary wizard-big" type="button">Start writing</button>
+          <p class="what-next">What happens next: the Write page opens with your cursor ready in the message box.</p>
+        </section>
+
+        <div class="wizard-footer">
+          <button id="wizard-already" class="text-link" type="button">I already have a key</button>
+        </div>
+      </div>
+    </div>
 
     <div id="toast" role="status" aria-live="polite"></div>
     <script src="app.js"></script>

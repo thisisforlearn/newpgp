@@ -9,6 +9,34 @@ import type { BrowserApi } from '../platform/browser';
 import type { Settings, SendMode } from '../types';
 
 export const SETTINGS_KEY = 'newpgp.settings.v1';
+/**
+ * Separate first-run marker for the popup setup wizard. It holds only a
+ * boolean-style flag: never message text, names, emails, keys or plaintext.
+ */
+export const SETUP_KEY = 'newpgp.setup.v1';
+
+export interface SetupMarker {
+  completed: boolean;
+}
+
+/** True only after the user finished the wizard. Storage failures show it again. */
+export async function isSetupComplete(api: BrowserApi): Promise<boolean> {
+  try {
+    const stored = await api.storage.local.get(SETUP_KEY);
+    return (stored[SETUP_KEY] as SetupMarker | undefined)?.completed === true;
+  } catch {
+    return false;
+  }
+}
+
+export async function markSetupComplete(api: BrowserApi): Promise<void> {
+  const marker: SetupMarker = { completed: true };
+  await api.storage.local.set({ [SETUP_KEY]: marker });
+}
+
+export async function clearSetupComplete(api: BrowserApi): Promise<void> {
+  await api.storage.local.remove(SETUP_KEY);
+}
 
 /**
  * Last settings we know were real. A transient storage failure must never

@@ -5,7 +5,7 @@
 //! The bridge speaks Chrome's 4-byte little-endian native messaging protocol
 //! on stdin/stdout. All diagnostics go to stderr, never stdout.
 
-use std::io::{Read, Write};
+use std::io::{IsTerminal, Read, Write};
 use std::path::{Path, PathBuf};
 
 use clap::{Parser, Subcommand};
@@ -35,6 +35,8 @@ use tracing_subscriber::EnvFilter;
 #[command(
     name = "newpgp",
     about = "Friendly OpenPGP for everyone. Private by default, simple by design.",
+    long_about = "Friendly OpenPGP for everyone.\n\nStart with `newpgp setup`: one command and three plain-language questions. If something looks wrong, run `newpgp doctor`; it only reads files and never shows a secret.\n\nAll keys and settings live in one folder. `newpgp doctor` prints where that folder is.",
+    after_help = "START HERE\n    newpgp setup                        Create your key and offer an emergency backup\n    newpgp doctor                       Check that everything is ready\n\nEVERYDAY USE\n    newpgp key show                     Show your public key and fingerprint\n    newpgp compose --body \"Hello\" --to friend@example.com\n\nSECRETS\n    Prefer NEWPGP_KEY_PASSWORD over --password so your password never\n    appears in shell history or the process list.",
     version
 )]
 struct Cli {
@@ -48,7 +50,40 @@ struct Cli {
 
 #[derive(Debug, Subcommand)]
 enum Command {
-    /// Create your key pair.
+    /// Set up your key in one friendly step. Start here if you're new.
+    ///
+    /// Asks three plain-language questions, creates your key, and offers to
+    /// make an emergency backup. Everything is stored in NEWPGP_HOME.
+    #[command(
+        long_about = "Create your key in one friendly step.\n\nRun `newpgp setup` and answer three questions. To automate it, pass --name, --email and --password, or set NEWPGP_KEY_PASSWORD (safer: it keeps the secret out of shell history).\n\nA password of at least 12 characters is recommended. Shorter passwords get a gentle warning but are still allowed. Press Enter to skip the password; we then make a backup code instead.\n\nBy default you are asked whether to make an emergency backup. --no-backup skips the question; --backup FILE creates one without asking."
+    )]
+    Setup {
+        /// The name people will see on your key.
+        #[arg(long)]
+        name: Option<String>,
+        /// Your email address, used to find your key automatically.
+        #[arg(long)]
+        email: Option<String>,
+        /// A password only you know. Omit to be asked, or set
+        /// NEWPGP_KEY_PASSWORD to keep it out of shell history.
+        #[arg(long, env = "NEWPGP_KEY_PASSWORD")]
+        password: Option<String>,
+        /// Skip the "make an emergency backup?" question.
+        #[arg(long)]
+        no_backup: bool,
+        /// Create an Argon2-protected emergency backup at this file, without asking.
+        #[arg(long, value_name = "FILE")]
+        backup: Option<PathBuf>,
+    },
+    /// Check that everything is ready. Read-only: changes nothing.
+    ///
+    /// Prints plain-language PASS/FAIL lines and exactly what to do next.
+    #[command(
+        visible_alias = "check",
+        long_about = "Check that NewPGP is ready to use.\n\nThis only reads your files: it never creates, changes or prints any secret. It shows what works, what doesn't, the app version and where your data lives."
+    )]
+    Doctor,
+    /// Create your key pair with flags. New users should prefer `setup`.
     Init {
         #[arg(long)]
         name: String,
@@ -230,6 +265,255 @@ fn load_keyring(home: &Path) -> Result<KeyRing> {
     KeyRing::open(&keyring_path(home))
 }
 
+// ---------------------------------------------------------------------------
+// Guided setup and read-only health check
+// ---------------------------------------------------------------------------
+
+const SETUP_NAME_QUESTION: &str = "What should people see when they get your key? (your name): ";
+const SETUP_EMAIL_QUESTION: &str =
+    "Which email do you use? (we use this to find your key automatically): ";
+const SETUP_PASSWORD_QUESTION: &str =
+    "Choose a password only you know (press Enter to skip — we'll make a backup code instead): ";
+
+/// Ask one question, flushing the prompt before blocking on input.
+/// `None` means end of input (for example, a scripted run with no stdin).
+fn ask(question: &str) -> Option<String> {
+    print!("{question}");
+    let _ = std::io::stdout().flush();
+    let mut line = String::new();
+    match std::io::stdin().read_line(&mut line) {
+        Ok(0) => None,
+        Ok(_) => Some(line.trim().to_string()),
+        Err(_) => None,
+    }
+}
+
+/// An address needs something on both sides of a single `@` and no spaces.
+fn valid_email(value: &str) -> bool {
+    match value.split_once('@') {
+        Some((local, domain)) => {
+            !local.trim().is_empty()
+                && !domain.trim().is_empty()
+                && !value.chars().any(char::is_whitespace)
+        }
+        None => false,
+    }
+}
+
+/// The one-command guided flow. Missing answers come from stdin; flags (or
+/// NEWPGP_KEY_PASSWORD) make the same flow usable from scripts.
+fn setup_command(
+    home: &Path,
+    name: Option<String>,
+    email: Option<String>,
+    password: Option<String>,
+    no_backup: bool,
+    backup: Option<PathBuf>,
+) -> Result<()> {
+    println!("Welcome! This takes about a minute.");
+    println!("I'll make a key so you can send and receive private messages.");
+    println!();
+
+    let name = match name {
+        Some(value) => {
+            let value = value.trim().to_string();
+            if value.is_empty() {
+                return Err(Error::new(
+                    "setup_name",
+                    "Please tell me the name people should see on your key.",
+                )
+                .with_hint("Run `newpgp setup --name \"Your Name\" --email you@example.com`."));
+            }
+            value
+        }
+        None => loop {
+            match ask(SETUP_NAME_QUESTION) {
+                Some(value) if !value.is_empty() => break value,
+                Some(_) => println!("Please type a name so people know whose key this is."),
+                None => {
+                    return Err(Error::new(
+                        "setup_input",
+                        "I couldn't read your answer for the name.",
+                    )
+                    .with_hint("Run `newpgp setup --name \"Your Name\" --email you@example.com`."))
+                }
+            }
+        },
+    };
+
+    let email = match email {
+        Some(value) => {
+            let value = value.trim().to_string();
+            if !valid_email(&value) {
+                return Err(
+                    Error::new("setup_email", "That email address doesn't look right.").with_hint(
+                        "Use the form name@example.com so people can find your key automatically.",
+                    ),
+                );
+            }
+            value
+        }
+        None => loop {
+            match ask(SETUP_EMAIL_QUESTION) {
+                Some(value) if valid_email(&value) => break value,
+                Some(_) => {
+                    println!("That doesn't look like an email address. Try name@example.com.")
+                }
+                None => {
+                    return Err(Error::new(
+                        "setup_input",
+                        "I couldn't read your answer for the email.",
+                    )
+                    .with_hint("Run `newpgp setup --email you@example.com`."))
+                }
+            }
+        },
+    };
+
+    println!("Your password locks your key so only you can use it; if you forget it, nobody can get it back.");
+    let password = match password {
+        Some(value) => value,
+        None => ask(SETUP_PASSWORD_QUESTION).unwrap_or_default(),
+    };
+    if !password.is_empty() && password.chars().count() < 12 {
+        println!("Heads up: that password is short. Twelve characters or more is much safer.");
+        println!("You can keep it, but a longer one is harder for someone else to guess.");
+    }
+    if !password.is_empty() {
+        println!("Tip: NEWPGP_KEY_PASSWORD keeps your password out of shell history next time.");
+    }
+
+    println!();
+    println!("Creating your key... (this usually takes a second)");
+    std::fs::create_dir_all(home).map_err(|e| {
+        Error::new("home", "Could not create the data folder.").with_hint(e.to_string())
+    })?;
+    let identity = generate_identity(&name, &email, &password)?;
+    std::fs::write(identity_path(home), identity.secret_armor()?).map_err(|e| {
+        Error::new("save_identity", "Could not save your key.").with_hint(e.to_string())
+    })?;
+    let mut ring = load_keyring(home)?;
+    ring.set_own_identity(&identity.public)?;
+    // Also remember the key under its owner's address so encrypting to
+    // yourself and bridge lookups work immediately, as in `bridge generateKey`.
+    let _ = ring.learn(&email, &identity.public, KeySource::Manual);
+    ring.save()?;
+    // Make the local search key now so a fresh setup is completely healthy.
+    let _ = load_index_key(home)?;
+
+    let backup_path = if no_backup {
+        None
+    } else if let Some(path) = backup {
+        Some(path)
+    } else if std::io::stdin().is_terminal() {
+        let answer = ask("Would you like to make an emergency backup now? (yes/no) [yes]: ")
+            .unwrap_or_default()
+            .to_ascii_lowercase();
+        if answer.is_empty() || answer.starts_with('y') {
+            Some(home.join("emergency-backup.asc"))
+        } else {
+            println!("No problem. Make one later with `newpgp backup create <file>`.");
+            None
+        }
+    } else {
+        println!("\nSkipping the backup question because this isn't interactive.");
+        println!("Make one when you're ready: newpgp backup create <file>");
+        None
+    };
+    let made_backup = backup_path.is_some();
+    if let Some(path) = backup_path {
+        println!();
+        println!("Making your emergency backup...");
+        backup_command(
+            home,
+            &BackupCommand::Create {
+                output: path.clone(),
+            },
+        )?;
+        println!("Backup saved at {}.", path.display());
+    }
+
+    println!();
+    println!("Quick check...");
+    let failures = doctor_checks(home);
+    if failures > 0 {
+        return Err(Error::new(
+            "setup_check",
+            "Your key was created, but a final check didn't pass.",
+        )
+        .with_hint("Run `newpgp doctor` to see what needs attention."));
+    }
+
+    println!();
+    println!("You're ready!");
+    println!("Your fingerprint: {}", identity.fingerprint);
+    println!("Share it so people can check they have the right key.");
+    println!();
+    println!("Send your first private message:");
+    println!("    newpgp compose --body \"Hello\" --to friend@example.com");
+    println!("See your public key (safe to share):");
+    println!("    newpgp key show");
+    if password.is_empty() && !made_backup {
+        println!();
+        println!("Tip: make a backup so you can recover this key if you lose this device:");
+        println!("    newpgp backup create <file>");
+    }
+    Ok(())
+}
+
+/// Read-only health checks. Returns the number of hard failures. Never prints
+/// passwords, setup codes, secret keys or the local search key.
+fn doctor_checks(home: &Path) -> usize {
+    let mut failures = 0;
+
+    match load_identity(home) {
+        Ok(identity) => {
+            println!("PASS: Your key is here and readable.");
+            println!("      Fingerprint: {}", identity.fingerprint);
+        }
+        Err(_) => {
+            failures += 1;
+            println!("FAIL: Your key is missing or could not be read.");
+            println!("      NEXT: run `newpgp setup` to create one.");
+        }
+    }
+
+    match load_keyring(home) {
+        Ok(ring) => {
+            println!("PASS: Your contact list is readable.");
+            println!("      Contacts saved: {}", ring.contacts().count());
+        }
+        Err(_) => {
+            failures += 1;
+            println!("FAIL: Your contact list could not be read.");
+            println!(
+                "      NEXT: restore a backup or add contacts again with `newpgp key import`."
+            );
+        }
+    }
+
+    let index_key = home.join("index-key.bin");
+    match std::fs::read(&index_key) {
+        Ok(bytes) if bytes.len() == 32 => println!("PASS: Local search is ready."),
+        Ok(_) => {
+            failures += 1;
+            println!("FAIL: The local search key is damaged.");
+            println!(
+                "      NEXT: delete {} and run `newpgp search hello` once.",
+                index_key.display()
+            );
+        }
+        Err(_) => println!(
+            "NOTE: Local search hasn't made its key yet; it appears the first time you use `newpgp search`. Nothing to do."
+        ),
+    }
+
+    println!("NOTE: Your keys and messages use standard OpenPGP, so GPG can read them. The newest features may need a recent GPG version.");
+    println!("Version: NewPGP {}", env!("CARGO_PKG_VERSION"));
+    println!("Data folder: {}", home.display());
+    failures
+}
+
 /// Resolve a recipient string to a certificate.
 fn resolve_recipient(value: &str, ring: &KeyRing) -> Result<SignedPublicKey> {
     if value.trim_start().starts_with("-----BEGIN PGP ") {
@@ -276,6 +560,35 @@ async fn main() {
 
 async fn run(cli: &Cli, home: &Path) -> Result<()> {
     match &cli.command {
+        Command::Setup {
+            name,
+            email,
+            password,
+            no_backup,
+            backup,
+        } => setup_command(
+            home,
+            name.clone(),
+            email.clone(),
+            password.clone(),
+            *no_backup,
+            backup.clone(),
+        ),
+        Command::Doctor => {
+            println!("Checking NewPGP (nothing will be changed)...\n");
+            let failures = doctor_checks(home);
+            if failures == 0 {
+                println!("\nAll good — you're ready to use NewPGP.");
+                Ok(())
+            } else {
+                let message = if !identity_path(home).exists() {
+                    "You haven't created a key yet. Run `newpgp setup` to create one."
+                } else {
+                    "Some checks didn't pass. Follow the NEXT lines above, then run `newpgp doctor` again."
+                };
+                Err(Error::new("doctor", message))
+            }
+        }
         Command::Init {
             name,
             email,

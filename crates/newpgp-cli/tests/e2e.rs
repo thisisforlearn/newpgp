@@ -92,6 +92,25 @@ fn init(home: &Home, name: &str, email: &str) -> String {
     out
 }
 
+/// The guided flow in scripted mode: one command, all answers as flags.
+fn setup(home: &Home, name: &str, email: &str, password: &str) -> String {
+    let out = home.ok(&[
+        "setup",
+        "--name",
+        name,
+        "--email",
+        email,
+        "--password",
+        password,
+        "--no-backup",
+    ]);
+    assert!(
+        home.file("identity.asc").exists(),
+        "setup must write identity.asc into NEWPGP_HOME"
+    );
+    out
+}
+
 fn fingerprint(out: &str) -> String {
     let line = out
         .lines()
@@ -1265,5 +1284,194 @@ fn bridge_encrypt_uses_caller_supplied_passphrase_for_signing() {
         Some("DECRYPT_FAILED"),
         "{}",
         frames[0]
+    );
+}
+
+#[test]
+fn setup_with_flags_creates_a_usable_key_and_skips_the_backup() {
+    let home = Home::new("setup-flags");
+    let email = "alice@example.com";
+    let password = "correct horse battery staple";
+
+    let out = setup(&home, "Alice Example", email, password);
+    assert!(out.contains("You're ready!"), "output: {out}");
+    let fp = fingerprint(&out);
+    assert_eq!(fp.len(), 40);
+    assert!(
+        out.contains("newpgp compose --body \"Hello\" --to friend@example.com"),
+        "setup should show what to do next: {out}"
+    );
+    assert!(
+        out.contains("newpgp key show"),
+        "setup should show where the public key is: {out}"
+    );
+    assert!(
+        !out.contains(password),
+        "setup must never print the password: {out}"
+    );
+    assert!(home.file("contacts.json").exists());
+    assert!(
+        !home.file("emergency-backup.asc").exists(),
+        "--no-backup must not create a backup file"
+    );
+
+    // The key really works: the fingerprint matches the saved key and the
+    // password unlocks decryption of a message addressed to its owner.
+    assert_eq!(fingerprint(&home.ok(&["key", "show"])), fp);
+    let input = home.file("setup.txt");
+    let encrypted = home.file("setup.txt.pgp");
+    let decrypted = home.file("setup.dec.txt");
+    fs::write(&input, b"setup works").expect("write plaintext");
+    home.ok(&[
+        "encrypt",
+        "-r",
+        email,
+        "-f",
+        input.to_str().unwrap(),
+        "-o",
+        encrypted.to_str().unwrap(),
+    ]);
+    home.ok(&[
+        "decrypt",
+        "-f",
+        encrypted.to_str().unwrap(),
+        "-o",
+        decrypted.to_str().unwrap(),
+        "--password",
+        password,
+    ]);
+    assert_eq!(
+        fs::read(&decrypted).expect("read decrypted"),
+        b"setup works"
+    );
+}
+
+#[test]
+fn setup_accepts_the_password_from_the_environment() {
+    let home = Home::new("setup-env");
+    let password = "a long password from the environment";
+    let out = home
+        .command(&[
+            "setup",
+            "--name",
+            "Env User",
+            "--email",
+            "env@example.com",
+            "--no-backup",
+        ])
+        .env("NEWPGP_KEY_PASSWORD", password)
+        .output()
+        .expect("could not run newpgp");
+    assert!(
+        out.status.success(),
+        "setup via NEWPGP_KEY_PASSWORD failed: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let text = String::from_utf8(out.stdout).expect("setup stdout is UTF-8");
+    assert!(text.contains("You're ready!"), "output: {text}");
+    assert!(!text.contains(password), "password was printed: {text}");
+    assert!(home.file("identity.asc").exists());
+}
+
+#[test]
+fn setup_interactive_questions_create_a_key() {
+    let home = Home::new("setup-prompts");
+    let password = "a password typed at the prompt";
+    let mut child = home
+        .command(&["setup", "--no-backup"])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("spawn newpgp setup");
+    {
+        let stdin = child.stdin.as_mut().expect("setup stdin is piped");
+        stdin
+            .write_all(format!("Prompt User\nprompt@example.com\n{password}\n").as_bytes())
+            .expect("answer setup questions");
+        stdin.flush().expect("flush answers");
+    }
+    let out = finish(child);
+    assert!(
+        out.status.success(),
+        "interactive setup failed (exit {:?}):\nstdout: {}\nstderr: {}",
+        out.status.code(),
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let text = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        text.contains("What should people see when they get your key? (your name):"),
+        "missing name question: {text}"
+    );
+    assert!(
+        text.contains("Which email do you use?"),
+        "missing email question: {text}"
+    );
+    assert!(
+        text.contains("Choose a password only you know"),
+        "missing password question: {text}"
+    );
+    assert!(
+        text.contains("nobody can get it back"),
+        "setup must explain the unrecoverable password: {text}"
+    );
+    assert!(!text.contains(password), "password was printed: {text}");
+    assert!(home.file("identity.asc").exists());
+    assert_eq!(fingerprint(&text).len(), 40);
+}
+
+#[test]
+fn doctor_is_healthy_after_setup_and_fails_on_an_empty_home() {
+    let healthy = Home::new("doctor-healthy");
+    setup(
+        &healthy,
+        "Doctor User",
+        "doctor@example.com",
+        "correct horse battery staple",
+    );
+
+    let out = healthy.ok(&["doctor"]);
+    assert!(
+        out.contains("PASS: Your key is here and readable."),
+        "doctor found no key: {out}"
+    );
+    assert!(
+        out.contains("PASS: Local search is ready."),
+        "doctor missed the index key: {out}"
+    );
+    assert!(
+        out.contains("GPG") && out.contains("Version: NewPGP"),
+        "doctor omitted the compatibility/version notes: {out}"
+    );
+    assert!(
+        out.contains("Data folder:"),
+        "doctor omitted the data directory: {out}"
+    );
+    assert!(
+        !out.contains("FAIL:"),
+        "healthy doctor reported FAIL: {out}"
+    );
+    assert!(
+        healthy.ok(&["check"]).contains("All good"),
+        "`check` alias should behave like `doctor`"
+    );
+
+    let empty = Home::new("doctor-empty");
+    let bad = empty.run(&["doctor"]);
+    assert!(
+        !bad.status.success(),
+        "doctor must fail when the home is empty"
+    );
+    let stdout = String::from_utf8_lossy(&bad.stdout);
+    let stderr = String::from_utf8_lossy(&bad.stderr);
+    assert!(stdout.contains("FAIL:"), "no FAIL line: {stdout}");
+    assert!(
+        stderr.contains("haven't created a key") && stderr.contains("newpgp setup"),
+        "doctor should give a friendly next step: {stderr}"
+    );
+    assert!(
+        !stderr.contains("identity.asc"),
+        "doctor must not expose file internals: {stderr}"
     );
 }

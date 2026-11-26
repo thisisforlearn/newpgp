@@ -22,6 +22,20 @@
     <string name="settings_warning_body">Auto-append mode is experimental. Your plaintext may already be saved in the other app\'s draft/autosave before encryption runs. The keyboard cannot detect a real \"send\" event, so the block may be appended to an unsent message. Some apps may reject or mangle the appended text.</string>
     <string name="settings_privacy_note">Privacy: no keystroke logging, no analytics, no network access. Only two settings and learned word counts are stored in app-private storage.</string>
 
+    <string name="settings_guide_heading">New to NewPGP Keyboard?</string>
+    <string name="settings_guide_subtitle">Follow 4 simple steps to turn it on.</string>
+    <string name="settings_guide_button">How to turn on the keyboard</string>
+
+    <string name="guide_title">How to turn on the keyboard</string>
+    <string name="guide_intro">Follow these 4 steps. It usually takes less than a minute.</string>
+    <string name="guide_step_1">Open your phone\'s Settings app. Tap System, then Languages &amp; input. Cannot see it? Search Settings for \"keyboard\".</string>
+    <string name="guide_step_2">Tap On-screen keyboard, then Manage keyboards. Switch on \"NewPGP Keyboard\". If Android asks you to confirm, tap OK.</string>
+    <string name="guide_step_3">Open any text box, such as a notes app. Tap the keyboard icon in the bottom bar, then choose \"NewPGP Keyboard\".</string>
+    <string name="guide_step_4">Type \"hello world\". You should see word suggestions above the keys. Tap the shield key to encrypt text you have selected.</string>
+    <string name="guide_engine_note">Note: the private encryption engine is not connected yet. If you tap the shield, the keyboard will tell you it is not available.</string>
+    <string name="guide_privacy_note">We never send what you type anywhere. There is no internet permission.</string>
+    <string name="guide_close">Got it</string>
+
     <string name="danger_dialog_title">Enable experimental auto-append?</string>
     <string name="danger_dialog_message">This mode can leak plaintext through provider draft autosave, cannot detect when a message is actually sent, and may break some apps. Recommended: leave it OFF and use the shield key to encrypt explicitly.</string>
     <string name="danger_dialog_acknowledgement">I understand these risks and want to enable it anyway</string>

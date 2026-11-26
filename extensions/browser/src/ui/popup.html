@@ -16,7 +16,99 @@
     </header>
 
     <main>
-      <section class="card">
+      <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+      <section id="setup-wizard" class="card wizard" aria-labelledby="setup-title">
+        <div class="wizard__head">
+          <h1 id="setup-title">Set up NewPGP in about 5 minutes</h1>
+          <p id="setup-step-label" class="wizard__counter">Step 1 of 3</p>
+        </div>
+        <div id="setup-feedback" class="wizard__feedback" aria-live="polite"></div>
+
+        <div id="setup-step-1" class="wizard__step">
+          <h2>1. Install the helper</h2>
+          <p>
+            A small local program does the locking. It keeps your key on your computer. You set it up once — there is
+            nothing to keep running.
+          </p>
+          <p class="wizard__links">
+            <a
+              href="https://github.com/thisisforlearn/newpgp/blob/main/native-host/install.ps1"
+              target="_blank"
+              rel="noopener"
+              >Windows: native-host/install.ps1</a
+            >
+            <a
+              href="https://github.com/thisisforlearn/newpgp/blob/main/native-host/install.sh"
+              target="_blank"
+              rel="noopener"
+              >Mac or Linux: native-host/install.sh</a
+            >
+          </p>
+          <p class="hint">
+            Need the exact steps? <a href="options.html" target="_blank" rel="noopener">Open the setup notes</a>.
+          </p>
+          <button id="setup-ping-button" type="button" class="big-button">I installed it</button>
+        </div>
+
+        <div id="setup-step-2" class="wizard__step" hidden>
+          <h2>2. Make your key</h2>
+          <p>Enter your name and the email you send from. Your key stays on your computer.</p>
+          <form id="setup-key-form">
+            <label for="setup-name">Your name</label>
+            <small id="setup-name-help">This is the name people see beside your messages.</small>
+            <input
+              id="setup-name"
+              name="name"
+              type="text"
+              autocomplete="name"
+              aria-describedby="setup-name-help"
+              placeholder="Alex Example"
+              required
+            />
+            <label for="setup-email">Your email</label>
+            <small id="setup-email-help">Use the address you usually send mail from.</small>
+            <input
+              id="setup-email"
+              name="email"
+              type="email"
+              autocomplete="email"
+              aria-describedby="setup-email-help"
+              placeholder="alex@example.com"
+              required
+            />
+            <button id="setup-create-key" type="submit" class="big-button">Create my key</button>
+          </form>
+        </div>
+
+        <div id="setup-step-3" class="wizard__step" hidden>
+          <h2>3. Write normally</h2>
+          <p>
+            Write your email as usual. We keep your words readable and add an encrypted copy underneath, so everyone
+            can still read it.
+          </p>
+          <p class="hint">Want to change that? Use the “Send PGP only” switch below.</p>
+          <p class="wizard__links">
+            <a
+              id="setup-done-gmail"
+              class="big-button button-link"
+              href="https://mail.google.com"
+              target="_blank"
+              rel="noopener"
+              >Done — open Gmail</a
+            >
+            <a
+              id="setup-done-outlook"
+              class="big-button button-link"
+              href="https://outlook.live.com"
+              target="_blank"
+              rel="noopener"
+              >Open Outlook</a
+            >
+          </p>
+        </div>
+      </section>
+
+      <section id="mode-card" class="card">
         <h1>Send safely, stay readable</h1>
         <p class="lede">
           By default your message stays exactly as you wrote it, with an encrypted copy added underneath.

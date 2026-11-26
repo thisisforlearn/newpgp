@@ -169,6 +169,7 @@ export interface Settings {
 export type RuntimeMessage =
   | { type: 'PING' }
   | { type: 'DISCOVER_KEY'; email: string }
+  | { type: 'GENERATE_KEY'; name: string; email: string; passphrase?: string }
   | { type: 'ENCRYPT'; plaintext: string; recipients: string[]; passphrase?: string }
   | { type: 'DECRYPT_ARMORED'; armored: string }
   | { type: 'GET_SETTINGS' }

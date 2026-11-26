@@ -20,6 +20,33 @@
     <string name="button_copy_public_key">Copy public key</string>
     <string name="button_continue">Continue</string>
 
+    <!-- Persistent status chip. The exact wording is intentional. -->
+    <string name="status_preview_chip">Preview build — encryption engine not connected</string>
+    <string name="status_engine_connected">Encryption engine connected</string>
+    <string name="status_why">Why?</string>
+    <string name="status_why_detail">This preview has no private encryption engine connected yet. Nothing you type here is really encrypted, and the app does not send it anywhere. Making a key is only possible once that engine is connected.</string>
+
+    <!-- First-run wizard: plain language, no jargon, no fake success. -->
+    <string name="wizard_progress">Step %1$d of 3</string>
+    <string name="wizard_step_welcome">Welcome</string>
+    <string name="wizard_step_make_key">Make your key</string>
+    <string name="wizard_step_ready">You\'re ready</string>
+    <string name="wizard_welcome_body">A key is a small digital ID for you. It has two parts: one you keep private, and one you share with friends. Friends use your shared part to send you messages only you can open.</string>
+    <string name="wizard_get_started">Get started</string>
+    <string name="wizard_make_key_body">Enter your name and email. We use them only to label your key on this device. Nothing you type here is sent anywhere.</string>
+    <string name="wizard_name_helper">This is what your friends will see.</string>
+    <string name="wizard_email_helper">Use the email address your friends know.</string>
+    <string name="wizard_key_unavailable">Key creation will be available when the private engine is connected. For now use the desktop app or browser extension.</string>
+    <string name="wizard_missing_fields">Add your name and email first.</string>
+    <string name="wizard_key_failed">Key creation did not finish. Please try again.</string>
+    <string name="wizard_copy_project_link">Copy project link</string>
+    <string name="wizard_step3_locked">Step 3 — You\'re ready. This step opens only when the private encryption engine is connected. Until then there is no key to share.</string>
+    <string name="wizard_ready_body">Your key is on this device. Share the public part with friends so they can send you private messages.</string>
+    <string name="wizard_fingerprint_label">Your fingerprint</string>
+    <string name="button_share_public_key">Share public key</string>
+    <string name="wizard_finish">Finish setup</string>
+    <string name="project_link">https://github.com/thisisforlearn/newpgp</string>
+
     <string name="write_title">Write a private message</string>
     <string name="field_message">Your message</string>
     <string name="field_recipients">To (email addresses, separated by commas)</string>

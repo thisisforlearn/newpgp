@@ -33,6 +33,24 @@ async function handle(message: RuntimeMessage): Promise<RuntimeResult<unknown>> 
       }
       return ok(await bridge.discoverKey({ email }));
     }
+    case 'GENERATE_KEY': {
+      const name = message.name.trim();
+      const email = message.email.trim();
+      if (!name || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        return fail({
+          title: 'Please check your name and email',
+          message: 'We need a name and a complete email address to make your key.',
+          hint: 'Try something like name@example.com.',
+        });
+      }
+      return ok(
+        await bridge.generateKey({
+          name,
+          email,
+          ...(message.passphrase === undefined ? {} : { passphrase: message.passphrase }),
+        }),
+      );
+    }
     case 'ENCRYPT': {
       const settings = await loadSettings(api);
       if (!settings.enabled) {

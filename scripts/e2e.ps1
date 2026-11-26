@@ -268,6 +268,35 @@ try {
         Assert-Condition (-not (Test-Path $wrongOutput)) 'decrypt wrote plaintext despite failing'
     }
 
+    Step 'setup creates a usable key and doctor reports it healthy' {
+        $setupHome = New-HomeDir 'setup'
+        $setupPassword = 'correct horse battery staple'
+        $setupResult = Invoke-Newpgp -HomeDir $setupHome -Arguments @('setup', '--name', 'Setup User', '--email', 'setup@example.com', '--password', $setupPassword, '--no-backup')
+        Assert-Condition $setupResult.Text.Contains("You're ready!") "setup did not finish: $($setupResult.Text)"
+        Assert-Condition (-not $setupResult.Text.Contains($setupPassword)) 'setup printed the password'
+        Assert-Condition (Test-Path (Join-Path $setupHome 'identity.asc')) 'setup did not create a key'
+        Assert-Condition (-not (Test-Path (Join-Path $setupHome 'emergency-backup.asc'))) '--no-backup still made a backup'
+
+        $doctor = Invoke-Newpgp -HomeDir $setupHome -Arguments @('doctor')
+        Assert-Condition $doctor.Text.Contains('PASS: Your key is here and readable.') "doctor found no key: $($doctor.Text)"
+        Assert-Condition $doctor.Text.Contains('Data folder:') "doctor omitted the data folder: $($doctor.Text)"
+
+        $plain = Join-Path $setupHome 'setup.txt'
+        $cipher = Join-Path $setupHome 'setup.txt.pgp'
+        $decrypted = Join-Path $setupHome 'setup.dec.txt'
+        [System.IO.File]::WriteAllText($plain, 'setup works')
+        Invoke-Newpgp -HomeDir $setupHome -Arguments @('encrypt', '-r', 'setup@example.com', '-f', $plain, '-o', $cipher) | Out-Null
+        $dec = Invoke-Newpgp -HomeDir $setupHome -Arguments @('decrypt', '-f', $cipher, '-o', $decrypted, '--password', $setupPassword)
+        Assert-Condition ([System.IO.File]::ReadAllText($decrypted) -ceq 'setup works') 'setup key could not decrypt a message'
+    }
+
+    Step 'doctor fails with a friendly message when the home is empty' {
+        $empty = New-HomeDir 'doctor-empty'
+        $badDoctor = Invoke-Newpgp -HomeDir $empty -Arguments @('doctor') -AllowFailure
+        Assert-Condition ($badDoctor.Code -ne 0) 'doctor succeeded on an empty home'
+        Assert-Condition ($badDoctor.Text.Contains('newpgp setup') -and $badDoctor.Text.Contains("haven't created a key")) "no friendly next step: $($badDoctor.Text)"
+    }
+
     Step 'native bridge answers framed requests and exits cleanly' {
         $bridgeHome = New-HomeDir 'bridge'
         $frames = @(Invoke-Bridge -HomeDir $bridgeHome -Requests @(

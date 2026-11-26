@@ -11,4 +11,10 @@
     <dimen name="key_function_text_size">14sp</dimen>
     <dimen name="suggestion_text_size">16sp</dimen>
     <dimen name="status_text_size">13sp</dimen>
+
+    <!-- Beginner "how to enable" guide: large text and touch targets. -->
+    <dimen name="guide_text_size">18sp</dimen>
+    <dimen name="guide_title_text_size">22sp</dimen>
+    <dimen name="guide_button_height">56dp</dimen>
+    <dimen name="guide_badge_size">40dp</dimen>
 </resources>

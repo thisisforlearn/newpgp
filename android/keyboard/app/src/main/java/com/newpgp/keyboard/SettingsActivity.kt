@@ -8,6 +8,7 @@ import android.widget.CheckBox
 import androidx.appcompat.app.AppCompatActivity
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.newpgp.keyboard.databinding.ActivitySettingsBinding
+import com.newpgp.keyboard.databinding.DialogEnableGuideBinding
 import com.newpgp.keyboard.settings.SettingsStore
 
 /** Settings screen reachable from system Settings > Languages & input > NewPGP Keyboard. */
@@ -24,6 +25,8 @@ class SettingsActivity : AppCompatActivity() {
         binding = ActivitySettingsBinding.inflate(layoutInflater)
         setContentView(binding.root)
         settings = SettingsStore(this)
+
+        binding.guideButton.setOnClickListener { showEnableGuide() }
 
         setSwitchState(binding.autocorrectSwitch, settings.autocorrectEnabled)
         binding.autocorrectSwitch.setOnCheckedChangeListener { _, checked ->
@@ -50,6 +53,20 @@ class SettingsActivity : AppCompatActivity() {
                 restoreDangerDialogConfirmation(acknowledgementChecked)
             }
         }
+    }
+
+    /** Beginner walkthrough: system Settings labels vary by manufacturer and Android version. */
+    private fun showEnableGuide() {
+        val guide = DialogEnableGuideBinding.inflate(layoutInflater)
+        val badges = listOf(guide.guideBadge1, guide.guideBadge2, guide.guideBadge3, guide.guideBadge4)
+        EnableGuideModel.badgeLabels().forEachIndexed { index, label ->
+            badges[index].text = label
+        }
+        val dialog = MaterialAlertDialogBuilder(this)
+            .setView(guide.root)
+            .setCancelable(true)
+            .show()
+        guide.guideCloseButton.setOnClickListener { dialog.dismiss() }
     }
 
     private fun confirmAutoAppend() {
@@ -122,4 +139,15 @@ class SettingsActivity : AppCompatActivity() {
         const val KEY_DANGER_DIALOG = "newpgp_danger_dialog_visible"
         const val KEY_ACKNOWLEDGED = "newpgp_danger_dialog_acknowledged"
     }
+}
+
+/** Pure step numbering for the beginner guide; kept JVM-testable (no Android dependencies). */
+object EnableGuideModel {
+    const val STEP_COUNT = 4
+
+    fun stepNumbers(): List<Int> = (1..STEP_COUNT).toList()
+
+    fun badgeLabels(): List<String> = stepNumbers().map { it.toString() }
+
+    fun isStepNumber(value: Int): Boolean = value in 1..STEP_COUNT
 }

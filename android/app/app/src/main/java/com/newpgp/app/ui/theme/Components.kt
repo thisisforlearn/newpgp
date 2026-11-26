@@ -8,15 +8,23 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -123,5 +131,110 @@ fun BusyIndicator() {
         CircularProgressIndicator()
         Spacer(Modifier.width(8.dp))
         Text(stringResource(R.string.busy_please_wait))
+    }
+}
+
+/**
+ * Always-visible, high-contrast status chip. It is placed at the very top of
+ * the app so a preview build can never be mistaken for working encryption.
+ * "Why?" expands a short explanation; nothing about this hides the warning.
+ */
+@Composable
+fun PreviewStatusChip(isRealCrypto: Boolean, bridgeName: String) {
+    var expanded by remember { mutableStateOf(false) }
+    val containerColor = if (isRealCrypto) {
+        MaterialTheme.colorScheme.primaryContainer
+    } else {
+        MaterialTheme.colorScheme.errorContainer
+    }
+    val contentColor = if (isRealCrypto) {
+        MaterialTheme.colorScheme.onPrimaryContainer
+    } else {
+        MaterialTheme.colorScheme.onErrorContainer
+    }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = containerColor,
+            contentColor = contentColor,
+        ),
+    ) {
+        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = stringResource(
+                        if (isRealCrypto) R.string.status_engine_connected else R.string.status_preview_chip,
+                    ),
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = contentColor,
+                    modifier = Modifier.weight(1f),
+                )
+                Spacer(Modifier.width(8.dp))
+                TextButton(
+                    onClick = { expanded = !expanded },
+                    modifier = Modifier.heightIn(min = 56.dp),
+                    colors = ButtonDefaults.textButtonColors(contentColor = contentColor),
+                ) {
+                    Text(
+                        text = stringResource(R.string.status_why),
+                        style = MaterialTheme.typography.bodyLarge,
+                    )
+                }
+            }
+            if (expanded) {
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = bridgeName,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = contentColor,
+                )
+                if (!isRealCrypto) {
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        text = stringResource(R.string.status_why_detail),
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = contentColor,
+                    )
+                }
+            }
+        }
+    }
+}
+
+/** 56dp primary action: comfortable for fingers, clear keyboard focus. */
+@Composable
+fun LargePrimaryButton(
+    text: String,
+    onClick: () -> Unit,
+    enabled: Boolean = true,
+    modifier: Modifier = Modifier,
+) {
+    Button(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = modifier.fillMaxWidth().heightIn(min = 56.dp),
+    ) {
+        Text(text = text, style = MaterialTheme.typography.bodyLarge)
+    }
+}
+
+/** 56dp secondary action, visually quieter than [LargePrimaryButton]. */
+@Composable
+fun LargeSecondaryButton(
+    text: String,
+    onClick: () -> Unit,
+    enabled: Boolean = true,
+    modifier: Modifier = Modifier,
+) {
+    FilledTonalButton(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = modifier.fillMaxWidth().heightIn(min = 56.dp),
+    ) {
+        Text(text = text, style = MaterialTheme.typography.bodyLarge)
     }
 }

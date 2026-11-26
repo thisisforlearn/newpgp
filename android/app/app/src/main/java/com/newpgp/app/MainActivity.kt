@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
@@ -55,9 +56,11 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.newpgp.app.ui.theme.BusyIndicator
+import com.newpgp.app.ui.theme.LargePrimaryButton
+import com.newpgp.app.ui.theme.LargeSecondaryButton
 import com.newpgp.app.ui.theme.MonospaceBlock
 import com.newpgp.app.ui.theme.NewPgpTheme
-import com.newpgp.app.ui.theme.PreviewNotice
+import com.newpgp.app.ui.theme.PreviewStatusChip
 import com.newpgp.app.ui.theme.SectionCard
 import com.newpgp.app.ui.theme.StatusBanner
 import kotlinx.coroutines.CoroutineScope
@@ -109,9 +112,13 @@ private fun NewPgpApp(
     val state by model.state.collectAsState()
     val scope = rememberCoroutineScope()
     var selectedTab by remember { mutableIntStateOf(0) }
+    val wizard = remember { WizardStateMachine(isRealCrypto = state.isRealCrypto) }
+    val wizardState by wizard.state.collectAsState()
 
-    LaunchedEffect(Unit) {
-        if (state.contacts.isEmpty()) model.refreshContacts()
+    // Only a real bridge may load contacts. The stub must not produce a
+    // spurious error banner at startup; the status chip carries that truth.
+    LaunchedEffect(state.isRealCrypto) {
+        if (state.isRealCrypto && state.contacts.isEmpty()) model.refreshContacts()
     }
 
     Scaffold(
@@ -130,7 +137,8 @@ private fun NewPgpApp(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            PreviewNotice(state.isRealCrypto, state.bridgeName)
+            // Persistent, impossible to miss, on every step and every tab.
+            PreviewStatusChip(state.isRealCrypto, state.bridgeName)
 
             state.statusMessage?.let { message ->
                 StatusBanner(
@@ -141,16 +149,26 @@ private fun NewPgpApp(
             }
             if (state.isBusy) BusyIndicator()
 
-            if (state.identity == null) {
-                OnboardingScreen(model = model, scope = scope, state = state)
+            val showWizard = state.identity == null ||
+                (wizardState.step == WizardStep.READY && !wizardState.finished)
+            if (showWizard) {
+                SetupWizard(
+                    model = model,
+                    wizard = wizard,
+                    wizardState = wizardState,
+                    scope = scope,
+                    state = state,
+                    onCopy = onCopy,
+                    onShare = onShare,
+                )
             } else {
                 KeyCard(state = state, onCopy = onCopy, model = model, scope = scope)
-                when (selectedTab) {
-                    0 -> WriteTab(model = model, scope = scope, state = state, onCopy = onCopy, onShare = onShare)
-                    1 -> ReadTab(model = model, scope = scope, state = state)
-                    2 -> PeopleTab(model = model, scope = scope, state = state)
-                    else -> FilesTab()
-                }
+            }
+            when (selectedTab) {
+                0 -> WriteTab(model = model, scope = scope, state = state, onCopy = onCopy, onShare = onShare)
+                1 -> ReadTab(model = model, scope = scope, state = state)
+                2 -> PeopleTab(model = model, scope = scope, state = state)
+                else -> FilesTab()
             }
         }
     }
@@ -176,37 +194,186 @@ private fun TabBar(selected: Int, onSelect: (Int) -> Unit) {
     }
 }
 
+/** Small, static progress row. Step 3 is visibly locked, never clickable. */
 @Composable
-private fun OnboardingScreen(model: AppModel, scope: CoroutineScope, state: AppUiState) {
-    var name by remember { mutableStateOf("") }
-    var email by remember { mutableStateOf("") }
-
-    SectionCard(title = stringResource(R.string.onboarding_title)) {
-        Text(text = stringResource(R.string.onboarding_body), style = MaterialTheme.typography.bodyLarge)
-        Spacer(Modifier.height(12.dp))
-        OutlinedTextField(
-            value = name,
-            onValueChange = { name = it },
-            label = { Text(stringResource(R.string.field_display_name)) },
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true,
-        )
-        Spacer(Modifier.height(8.dp))
-        OutlinedTextField(
-            value = email,
-            onValueChange = { email = it },
-            label = { Text(stringResource(R.string.field_email)) },
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true,
-        )
-        Spacer(Modifier.height(12.dp))
-        Button(
-            onClick = { scope.launch { model.createIdentity(email, name) } },
-            enabled = !state.isBusy && name.isNotBlank() && email.isNotBlank(),
-        ) {
-            Text(text = stringResource(R.string.button_create_key))
+private fun WizardProgress(step: WizardStep, isRealCrypto: Boolean) {
+    val labels = listOf(
+        R.string.wizard_step_welcome,
+        R.string.wizard_step_make_key,
+        R.string.wizard_step_ready,
+    )
+    Row(modifier = Modifier.fillMaxWidth()) {
+        labels.forEachIndexed { index, label ->
+            val current = step.ordinal == index
+            val locked = index == 2 && !isRealCrypto
+            Text(
+                text = "${index + 1}. ${stringResource(label)}",
+                modifier = Modifier.weight(1f),
+                style = MaterialTheme.typography.bodyLarge,
+                color = when {
+                    current -> MaterialTheme.colorScheme.primary
+                    locked -> MaterialTheme.colorScheme.onSurfaceVariant
+                    else -> MaterialTheme.colorScheme.onSurface
+                },
+            )
         }
     }
+}
+
+/** Three-step, five-minute setup. Every outcome is honest about the bridge. */
+@Composable
+private fun SetupWizard(
+    model: AppModel,
+    wizard: WizardStateMachine,
+    wizardState: WizardUiState,
+    scope: CoroutineScope,
+    state: AppUiState,
+    onCopy: (String) -> Unit,
+    onShare: (String) -> Unit,
+) {
+    SectionCard(title = stringResource(R.string.wizard_progress, wizardState.step.ordinal + 1)) {
+        WizardProgress(step = wizardState.step, isRealCrypto = state.isRealCrypto)
+        Spacer(Modifier.height(16.dp))
+
+        when (wizardState.step) {
+            WizardStep.WELCOME -> {
+                Text(
+                    text = stringResource(R.string.wizard_step_welcome),
+                    style = MaterialTheme.typography.titleLarge,
+                )
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    text = stringResource(R.string.wizard_welcome_body),
+                    style = MaterialTheme.typography.bodyLarge,
+                )
+                Spacer(Modifier.height(16.dp))
+                LargePrimaryButton(
+                    text = stringResource(R.string.wizard_get_started),
+                    onClick = wizard::getStarted,
+                )
+            }
+
+            WizardStep.MAKE_KEY -> {
+                Text(
+                    text = stringResource(R.string.wizard_step_make_key),
+                    style = MaterialTheme.typography.titleLarge,
+                )
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    text = stringResource(R.string.wizard_make_key_body),
+                    style = MaterialTheme.typography.bodyLarge,
+                )
+                Spacer(Modifier.height(12.dp))
+                OutlinedTextField(
+                    value = wizardState.displayName,
+                    onValueChange = wizard::setDisplayName,
+                    label = { Text(stringResource(R.string.field_display_name)) },
+                    supportingText = {
+                        Text(
+                            text = stringResource(R.string.wizard_name_helper),
+                            style = MaterialTheme.typography.bodyLarge,
+                        )
+                    },
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
+                    singleLine = true,
+                )
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = wizardState.email,
+                    onValueChange = wizard::setEmail,
+                    label = { Text(stringResource(R.string.field_email)) },
+                    supportingText = {
+                        Text(
+                            text = stringResource(R.string.wizard_email_helper),
+                            style = MaterialTheme.typography.bodyLarge,
+                        )
+                    },
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
+                    singleLine = true,
+                )
+                Spacer(Modifier.height(12.dp))
+                LargePrimaryButton(
+                    text = stringResource(R.string.button_create_key),
+                    onClick = {
+                        when (val action = wizard.requestKeyCreation()) {
+                            is WizardKeyAction.Create -> scope.launch {
+                                val result = model.createIdentity(action.email, action.displayName)
+                                result.onSuccess(wizard::onKeyCreated)
+                                    .onFailure { wizard.onKeyCreationFailed() }
+                            }
+
+                            WizardKeyAction.Blocked -> Unit
+                        }
+                    },
+                    enabled = !state.isBusy,
+                )
+                Spacer(Modifier.height(8.dp))
+                LargeSecondaryButton(
+                    text = stringResource(R.string.wizard_copy_project_link),
+                    onClick = { onCopy(stringResource(R.string.project_link)) },
+                )
+
+                wizardState.blockedReason?.let { reason ->
+                    Spacer(Modifier.height(12.dp))
+                    StatusBanner(
+                        message = stringResource(blockedMessage(reason)),
+                        isError = true,
+                        onDismiss = wizard::dismissBlocked,
+                    )
+                }
+
+                Spacer(Modifier.height(12.dp))
+                LargeSecondaryButton(
+                    text = stringResource(R.string.wizard_step_ready),
+                    onClick = {},
+                    enabled = false,
+                )
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    text = stringResource(R.string.wizard_step3_locked),
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+
+            WizardStep.READY -> {
+                Text(
+                    text = stringResource(R.string.wizard_step_ready),
+                    style = MaterialTheme.typography.titleLarge,
+                )
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    text = stringResource(R.string.wizard_ready_body),
+                    style = MaterialTheme.typography.bodyLarge,
+                )
+                Spacer(Modifier.height(12.dp))
+                wizardState.fingerprint?.let { fingerprint ->
+                    Text(
+                        text = stringResource(R.string.wizard_fingerprint_label),
+                        style = MaterialTheme.typography.bodyLarge,
+                    )
+                    MonospaceBlock(text = fingerprint)
+                }
+                Spacer(Modifier.height(12.dp))
+                LargeSecondaryButton(
+                    text = stringResource(R.string.button_share_public_key),
+                    onClick = { wizardState.publicKeyArmored?.let(onShare) },
+                    enabled = wizardState.publicKeyArmored != null,
+                )
+                Spacer(Modifier.height(8.dp))
+                LargePrimaryButton(
+                    text = stringResource(R.string.wizard_finish),
+                    onClick = wizard::finish,
+                )
+            }
+        }
+    }
+}
+
+private fun blockedMessage(reason: WizardBlockedReason): Int = when (reason) {
+    WizardBlockedReason.ENGINE_NOT_CONNECTED -> R.string.wizard_key_unavailable
+    WizardBlockedReason.MISSING_FIELDS -> R.string.wizard_missing_fields
+    WizardBlockedReason.KEY_CREATION_FAILED -> R.string.wizard_key_failed
 }
 
 @Composable

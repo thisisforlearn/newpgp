@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+/* Copyright (C) 2026 Vaibhav - https://github.com/thisisforlearn */
 :root {
   color-scheme: light dark;
   --bg: #f5f7fb;
@@ -24,6 +26,8 @@
     --line: #303a52;
     --accent: #9fb0ff;
     --accent-soft: #263056;
+    --good: #5ddb9a;
+    --bad: #ff8a80;
   }
 }
 
@@ -156,6 +160,59 @@ details li { margin: 6px 0; }
 
 footer { text-align: center; font-size: 12px; }
 a { color: var(--accent); }
+
+/* First-run setup wizard: large text, large tap targets, one action per step. */
+.wizard { font-size: 16px; }
+.wizard__head h1 { font-size: 22px; margin-bottom: 4px; }
+.wizard__counter {
+  margin: 0 0 10px;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--accent);
+}
+.wizard__step h2 { font-size: 18px; margin-top: 12px; }
+.wizard__step p,
+.wizard label,
+.wizard .hint,
+.wizard small { font-size: 16px; }
+.wizard__links { display: grid; gap: 8px; }
+.wizard__links a { font-size: 16px; font-weight: 600; }
+.wizard input {
+  display: block;
+  width: 100%;
+  min-height: 48px;
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--card);
+  color: var(--ink);
+  font-size: 16px;
+}
+.big-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+  padding: 10px 18px;
+  border-radius: 10px;
+  font-size: 17px;
+  font-weight: 700;
+  text-decoration: none;
+}
+.button-link { background: var(--accent); color: #fff; }
+.button-link:hover { filter: brightness(1.08); }
+.wizard__feedback:empty { display: none; }
+.wizard__notice { font-size: 16px; }
+.wizard__notice-title { display: block; font-size: 18px; margin-bottom: 4px; }
+.notice--good {
+  border-color: var(--good);
+  background: color-mix(in srgb, var(--good) 12%, var(--card));
+}
+.notice--good .wizard__notice-title { color: var(--good); }
+.notice--error .wizard__notice-title { color: var(--bad); }
+.fingerprint--large { font-size: 20px; font-weight: 700; margin-top: 8px; }
+.showing-setup #mode-card { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
 
 /* Styles for UI injected into webmail pages live in content.css so no global
    variables leak into the host page. */

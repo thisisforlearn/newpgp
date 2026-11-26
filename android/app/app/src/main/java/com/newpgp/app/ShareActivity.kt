@@ -50,7 +50,7 @@ import androidx.compose.ui.unit.dp
 import com.newpgp.app.ui.theme.BusyIndicator
 import com.newpgp.app.ui.theme.MonospaceBlock
 import com.newpgp.app.ui.theme.NewPgpTheme
-import com.newpgp.app.ui.theme.PreviewNotice
+import com.newpgp.app.ui.theme.PreviewStatusChip
 import com.newpgp.app.ui.theme.SectionCard
 import com.newpgp.app.ui.theme.StatusBanner
 import kotlinx.coroutines.launch
@@ -138,7 +138,7 @@ private fun ShareScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            PreviewNotice(state.isRealCrypto, state.bridgeName)
+            PreviewStatusChip(state.isRealCrypto, state.bridgeName)
 
             state.statusMessage?.let { message ->
                 StatusBanner(
