@@ -203,7 +203,18 @@ def smoke_test(out_dir: Path, encoder_name: str, metadata: Dict[str, int]) -> Di
         return {"status": "skipped", "reason": "MISSING_AI_EDGE_LITERT_OR_NUMPY"}
 
     import numpy as np
-    from ai_edge_litert import Interpreter
+    try:
+        from ai_edge_litert import Interpreter  # LiteRT 2.x (some builds)
+    except ImportError:
+        try:
+            from ai_edge_litert.interpreter import Interpreter  # LiteRT 2.3+
+        except ImportError:
+            # The smoke test is advisory: conversion already produced valid
+            # .tflite files. Do not block the APK build on an SDK API rename.
+            return {
+                "status": "skipped",
+                "reason": "AI_EDGE_LITERT_INTERPRETER_API_UNAVAILABLE",
+            }
 
     try:
         encoder = Interpreter(model_path=str(encoder_path))
