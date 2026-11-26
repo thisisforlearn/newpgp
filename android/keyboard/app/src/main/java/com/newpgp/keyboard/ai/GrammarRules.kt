@@ -18,7 +18,10 @@ class GrammarRules {
     /** Full conservative grammar pass. Never throws for normal text. */
     fun rewrite(text: String): String {
         if (text.isEmpty()) return text
-        var result = WHITESPACE.replace(text.trim(), " ")
+        val trimmed = text.trim()
+        // URLs, emails, hashtags, emoji and code-like text are never rewritten.
+        if (isNonProse(trimmed)) return trimmed
+        var result = WHITESPACE.replace(trimmed, " ")
         result = fixTypos(result)
         result = fixArticles(result)
         result = fixDuplicateWords(result)
@@ -132,13 +135,67 @@ class GrammarRules {
         return out.toString()
     }
 
+    /**
+     * Cheap allocation-free check for text that must be left byte-for-byte alone:
+     * URLs, emails, @handles, hashtags, emoji and code-like snippets.
+     */
+    private fun isNonProse(text: String): Boolean {
+        if (text.startsWith("http", ignoreCase = true) ||
+            text.startsWith("www.", ignoreCase = true) ||
+            text.startsWith("ftp", ignoreCase = true)
+        ) return true
+        for (ch in text) {
+            if (ch == '@' || ch == '#' || ch == '/' || ch == '\\' || ch == '`' ||
+                ch == '<' || ch == '>' || ch == '{' || ch == '}' || ch == '[' || ch == ']' ||
+                ch == '=' || ch == '~' || ch == '|' || Character.isSurrogate(ch)
+            ) return true
+            val type = Character.getType(ch)
+            if (type == Character.OTHER_SYMBOL || type == Character.MATH_SYMBOL ||
+                type == Character.MODIFIER_SYMBOL
+            ) return true
+        }
+        return false
+    }
+
+    /**
+     * Add a single terminal period to a complete, plain-text sentence.
+     *
+     * The rule: after trimming, require at least two words, a final character that
+     * is a letter/digit (not punctuation), no existing terminal `.`/`!`/`?`, and no
+     * interior period (which signals an abbreviation such as "Mr.", a decimal, or
+     * a URL). Newlines, emoji, symbols and code-like characters are left alone.
+     * A single pass over the string; no regex is compiled or run per keystroke.
+     */
     private fun addTerminalPunctuation(input: String): String {
-        if (input.length < 4 || input.contains('\n')) return input
-        val last = input.last()
-        if (last == '.' || last == '!' || last == '?') return input
-        if (input.count { it == ' ' } < 2) return input // avoid editing short chat replies
-        if (input.startsWith("http", ignoreCase = true)) return input
-        return "$input."
+        val text = input.trim()
+        if (text.length < 4) return input
+        val last = text.last()
+        if (last == '.' || last == '!' || last == '?') return input // never double-punctuate
+
+        var words = 0
+        var inWord = false
+        for (index in text.indices) {
+            val ch = text[index]
+            when {
+                ch.isLetterOrDigit() -> {
+                    if (!inWord) {
+                        words++
+                        inWord = true
+                    }
+                }
+                ch == '\'' || ch == '-' -> Unit // contractions and hyphenated words stay one word
+                ch == ' ' || ch == '\t' || ch == '\u00A0' -> inWord = false
+                ch == '.' -> {
+                    // A non-final period means abbreviation, decimal or URL — leave it alone.
+                    if (index != text.lastIndex) return input
+                    inWord = false
+                }
+                ch in ",;:!?\"" -> inWord = false
+                else -> return input // newline, emoji, symbol, code — not plain prose
+            }
+        }
+        if (words < 2 || !last.isLetterOrDigit()) return input
+        return "$text."
     }
 
     private fun removeFillers(input: String): String {

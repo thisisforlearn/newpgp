@@ -64,8 +64,9 @@ class ShieldEncryptor(
             return Result.failure(IllegalArgumentException("Nothing to encrypt"))
         }
         val generation = text.generation
-        val armored = encryption.encrypt(plaintext, password).getOrNull()
-            ?: return Result.failure(SecurityException(NOTHING_INSERTED_MESSAGE))
+        val attempt = encryption.encrypt(plaintext, password)
+        val armored = attempt.getOrNull()
+            ?: return Result.failure(SecurityException(failureMessage(attempt.exceptionOrNull())))
         if (armored.isBlank()) {
             return Result.failure(SecurityException(NOTHING_INSERTED_MESSAGE))
         }
@@ -80,8 +81,23 @@ class ShieldEncryptor(
         return Result.success(armored)
     }
 
+    /**
+     * Converts a bridge failure into non-sensitive, plain-language copy. The raw
+     * exception text is never echoed: the only detail worth preserving is the
+     * dedicated "engine missing" case whose exact copy is owned by [NativePgpBridge].
+     * Every failure reassures the user that nothing was inserted, so their typed
+     * text is still in the field.
+     */
+    private fun failureMessage(cause: Throwable?): String =
+        if (cause?.message == NativePgpBridge.MISSING_ENGINE_MESSAGE) {
+            NativePgpBridge.MISSING_ENGINE_MESSAGE + NOTHING_INSERTED_SUFFIX
+        } else {
+            NOTHING_INSERTED_MESSAGE
+        }
+
     private companion object {
         const val NOTHING_INSERTED_MESSAGE = "Encryption failed; nothing was inserted"
+        const val NOTHING_INSERTED_SUFFIX = "; nothing was inserted"
         const val SESSION_CHANGED_MESSAGE = "Input session changed; nothing was inserted"
     }
 }

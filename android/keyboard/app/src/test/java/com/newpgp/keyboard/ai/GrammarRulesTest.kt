@@ -27,6 +27,27 @@ class GrammarRulesTest {
     fun normalizesSpacingAndDoubledWords() {
         assertEquals("This is the test.", rules.rewrite("this  is   the the test"))
         assertEquals("Hello, world.", rules.rewrite("hello , world"))
+        assertEquals("Hello world.", rules.rewrite("hello world"))
+    }
+
+    @Test
+    fun addsTerminalPeriodOnlyToCompleteProseSentences() {
+        // Two words and no terminal mark -> exactly one period is appended.
+        assertEquals("Hello world.", rules.rewrite("Hello world"))
+        // Already-correct text is never double-punctuated.
+        assertEquals("Hello world.", rules.rewrite("Hello world."))
+        assertEquals("Are you ok?", rules.rewrite("are you ok?"))
+        assertEquals("Are you ok?", rules.rewrite("Are you ok?"))
+        // An interior period (abbreviation or decimal) means "leave it alone".
+        assertEquals("See Mr. Smith", rules.rewrite("see Mr. Smith"))
+        assertEquals("See Dr. Jones", rules.rewrite("see Dr. Jones"))
+        assertEquals("Meet me at 3.5", rules.rewrite("meet me at 3.5"))
+        // URLs, emails, hashtags, emoji and code-like text are untouched.
+        assertEquals("https://example.com", rules.rewrite("https://example.com"))
+        assertEquals("mail me at a@b.com", rules.rewrite("mail me at a@b.com"))
+        assertEquals("#hello", rules.rewrite("#hello"))
+        assertEquals("hello \u2603", rules.rewrite("hello \u2603"))
+        assertEquals("val x = 1", rules.rewrite("val x = 1"))
     }
 
     @Test

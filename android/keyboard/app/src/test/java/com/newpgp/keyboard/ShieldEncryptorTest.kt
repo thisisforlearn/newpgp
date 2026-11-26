@@ -76,17 +76,62 @@ class ShieldEncryptorTest {
     @Test
     fun failureCommitsNothingAndKeepsTheTypedText() {
         val ic = FakeTextEditConnection()
+        // Model the real bridge: a genuinely absent engine fails with its dedicated
+        // non-sensitive copy, not with a raw "engine missing" implementation detail.
         val (shield, text) = subject(
-            FakeBridge(outcome = Result.failure(IllegalStateException("engine missing")))
+            FakeBridge(
+                outcome = Result.failure(
+                    UnsupportedOperationException(NativePgpBridge.MISSING_ENGINE_MESSAGE)
+                )
+            )
         )
         text.type(ic, "secret")
 
         val result = shield.run(ic, "secret", "")
 
         assertTrue(result.isFailure)
-        assertEquals("engine missing", result.exceptionOrNull()?.message)
+        // Nothing is committed: no armor, no plaintext loss, no leaked batch.
         assertEquals("secret", ic.text())
         assertEquals("secret", text.composingText())
+        assertEquals(0, ic.batchDepth)
+        // Plain-language guidance that both explains the cause and says the text
+        // is still there. Use substring/regex, not a brittle exact string.
+        val message = result.exceptionOrNull()?.message.orEmpty()
+        assertTrue(
+            "expected missing-engine guidance but was: $message",
+            Regex("engine.*missing", RegexOption.IGNORE_CASE).containsMatchIn(message)
+        )
+        assertTrue(
+            "expected reassurance that nothing was inserted but was: $message",
+            message.contains("nothing was inserted", ignoreCase = true)
+        )
+    }
+
+    @Test
+    fun genericEncryptionFailureUsesFriendlyCopyAndNeverLeaksRawError() {
+        val ic = FakeTextEditConnection()
+        ic.setText("keep me")
+        val (shield, _) = subject(
+            FakeBridge(outcome = Result.failure(SecurityException("opaque native error 0x1337")))
+        )
+
+        val result = shield.run(ic, "keep me", "")
+
+        assertTrue(result.isFailure)
+        assertEquals("keep me", ic.text())
+        val message = result.exceptionOrNull()?.message.orEmpty()
+        assertTrue(
+            "expected generic failure copy but was: $message",
+            message.contains("Encryption failed", ignoreCase = true)
+        )
+        assertTrue(
+            "expected reassurance that nothing was inserted but was: $message",
+            message.contains("nothing was inserted", ignoreCase = true)
+        )
+        assertFalse(
+            "raw bridge error text must never reach the user: $message",
+            message.contains("opaque native error")
+        )
     }
 
     @Test

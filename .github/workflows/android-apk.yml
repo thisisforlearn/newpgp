@@ -8,8 +8,9 @@ name: Android APK
 #   assembles the APK. AGP automatically includes the standard jniLibs and
 #   assets source-set directories, so no extra Gradle config is needed here.
 #   android-actions/setup-android@v3 is deliberately NOT used: it installs the
-#   removed `tools` package and fails. The SDK/NDK are preinstalled on
-#   ubuntu-latest and the NDK path is discovered below.
+#   removed `tools` package and fails. The SDK/NDK are usually preinstalled on
+#   ubuntu-latest; the NDK path is discovered below (with an sdkmanager
+#   fallback when the image has no NDK).
 
 on:
   push:
@@ -145,23 +146,67 @@ jobs:
       - name: Discover Android NDK
         run: |
           set -euo pipefail
+          # An installed NDK is a directory with source.properties (and/or the
+          # legacy ndk-build script). A bare directory named "ndk*" is not
+          # enough - cmdline-tools and other SDK bits can match that pattern.
+          valid_ndk() {
+            [ -d "$1" ] || return 1
+            [ -f "$1/source.properties" ] || [ -x "$1/ndk-build" ] || return 1
+            return 0
+          }
+
           NDK=""
-          if [ -d "${ANDROID_HOME:-}/ndk" ]; then
-            NDK="$(find "$ANDROID_HOME/ndk" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | sort -V | tail -n 1)"
+          SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
+
+          # 1) Newest side-by-side NDK under $ANDROID_HOME/ndk.
+          if [ -n "$SDK" ] && [ -d "$SDK/ndk" ]; then
+            candidate="$(find "$SDK/ndk" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | sort -V | tail -n 1 || true)"
+            if valid_ndk "$candidate"; then NDK="$candidate"; fi
           fi
-          if [ -z "$NDK" ] && [ -n "${ANDROID_NDK_LATEST_HOME:-}" ]; then
-            NDK="$ANDROID_NDK_LATEST_HOME"
+
+          # 2) Canonical env vars exported by the runner image.
+          for candidate in "${ANDROID_NDK_HOME:-}" "${ANDROID_NDK_ROOT:-}" \
+                           "${ANDROID_NDK:-}" "${ANDROID_NDK_LATEST_HOME:-}"; do
+            if [ -z "$NDK" ] && valid_ndk "$candidate"; then NDK="$candidate"; fi
+          done
+
+          # 3) Legacy ndk-bundle or any other NDK-shaped dir under the SDK.
+          if [ -z "$NDK" ] && [ -n "$SDK" ] && [ -d "$SDK" ]; then
+            while IFS= read -r candidate; do
+              if [ -z "$NDK" ] && valid_ndk "$candidate"; then NDK="$candidate"; fi
+            done < <(find "$SDK" -maxdepth 3 -type d -name 'ndk*' 2>/dev/null | sort -V -r || true)
           fi
-          if [ -z "$NDK" ] && [ -n "${ANDROID_NDK_HOME:-}" ]; then
-            NDK="$ANDROID_NDK_HOME"
+
+          # 4) Nothing preinstalled: fetch a known-good NDK with sdkmanager.
+          if [ -z "$NDK" ]; then
+            echo "No preinstalled Android NDK found; installing one via sdkmanager."
+            SDKMGR=""
+            if command -v sdkmanager >/dev/null 2>&1; then
+              SDKMGR="$(command -v sdkmanager)"
+            elif [ -n "$SDK" ] && [ -x "$SDK/cmdline-tools/latest/bin/sdkmanager" ]; then
+              SDKMGR="$SDK/cmdline-tools/latest/bin/sdkmanager"
+            elif [ -n "$SDK" ]; then
+              SDKMGR="$(find "$SDK/cmdline-tools" -mindepth 3 -maxdepth 3 -type f -name sdkmanager 2>/dev/null | sort -V | tail -n 1 || true)"
+            fi
+            if [ -z "$SDKMGR" ] || [ ! -x "$SDKMGR" ]; then
+              echo "::error title=Android NDK::No Android NDK found and sdkmanager is unavailable - the Rust crypto bridge cannot be built."
+              exit 1
+            fi
+            yes | "$SDKMGR" --licenses > /dev/null 2>&1 || true
+            for ver in 27.2.12479018 27.3.13750724 26.3.11579264; do
+              echo "Installing ndk;$ver ..."
+              if "$SDKMGR" "ndk;$ver" > /dev/null 2>&1 && [ -n "$SDK" ]; then
+                candidate="$SDK/ndk/$ver"
+                if valid_ndk "$candidate"; then NDK="$candidate"; break; fi
+              fi
+            done
+            if [ -z "$NDK" ]; then
+              echo "::error title=Android NDK::sdkmanager could not install any known Android NDK - the Rust crypto bridge cannot be built."
+              exit 1
+            fi
+            echo "::notice title=Android NDK::Installed NDK at $NDK"
           fi
-          if [ -z "$NDK" ] && [ -d "${ANDROID_HOME:-}/ndk-bundle" ]; then
-            NDK="$ANDROID_HOME/ndk-bundle"
-          fi
-          if [ -z "$NDK" ] || [ ! -d "$NDK" ]; then
-            echo "::error title=Android NDK::No Android NDK found under $ANDROID_HOME/ndk - cargo-ndk needs one."
-            exit 1
-          fi
+
           echo "Using Android NDK: $NDK"
           echo "ANDROID_NDK_HOME=$NDK" >> "$GITHUB_ENV"
           echo "ANDROID_NDK_ROOT=$NDK" >> "$GITHUB_ENV"
@@ -170,24 +215,41 @@ jobs:
         run: |
           set -euo pipefail
           LIBDIR="android/keyboard/app/build/newpgp/jniLibs"
-          # newpgp-mobile is currently its own workspace root, so point cargo
-          # at its manifest; -p keeps the built package explicit.
+          RUST_TARGET_DIR="crates/newpgp-mobile/target"
+          # newpgp-mobile is its own workspace root, so point cargo at its
+          # manifest and make the target dir explicit: CMake imports the Rust
+          # staticlib from exactly this directory (NEWPGP_RUST_TARGET_DIR).
           cargo ndk -t arm64-v8a -t armeabi-v7a -t x86_64 \
             -o "$LIBDIR" build --release \
-            --manifest-path crates/newpgp-mobile/Cargo.toml -p newpgp-mobile
-          # AGP auto-includes app/src/main/jniLibs/<abi>/*.so. Accept either the
-          # cdylib name (libnewpgp_mobile.so) or the CMake/JNI name currently
-          # used by the Kotlin bridge (libnewpgp_jni.so).
+            --manifest-path crates/newpgp-mobile/Cargo.toml \
+            --target-dir "$RUST_TARGET_DIR" -p newpgp-mobile
+
+          # cargo-ndk writes the cdylib .so into $LIBDIR/<abi>, but the APK's
+          # libnewpgp_mobile.so is produced by CMake (C++ JNI shim + Rust
+          # staticlib). Accept either output: a non-empty .so from cargo-ndk,
+          # OR the staticlib CMake imports. Never fail the job just because the
+          # intermediate cdylib was not copied into $LIBDIR.
           for abi in arm64-v8a armeabi-v7a x86_64; do
+            case "$abi" in
+              arm64-v8a) triple="aarch64-linux-android" ;;
+              armeabi-v7a) triple="armv7-linux-androideabi" ;;
+              x86_64) triple="x86_64-linux-android" ;;
+            esac
             found=""
             for name in libnewpgp_mobile.so libnewpgp_jni.so; do
               if [ -s "$LIBDIR/$abi/$name" ]; then found="$name"; break; fi
             done
-            if [ -z "$found" ]; then
-              echo "::error title=Native bridge::No native library found for $abi in $LIBDIR/$abi (expected libnewpgp_mobile.so or libnewpgp_jni.so)."
-              exit 1
+            if [ -n "$found" ]; then
+              echo "Prepared $LIBDIR/$abi/$found ($(stat -c%s "$LIBDIR/$abi/$found") bytes)"
+              continue
             fi
-            echo "Prepared $LIBDIR/$abi/$found ($(stat -c%s "$LIBDIR/$abi/$found") bytes)"
+            STATIC="$RUST_TARGET_DIR/$triple/release/libnewpgp_mobile.a"
+            if [ -s "$STATIC" ]; then
+              echo "::notice title=Native bridge::No cargo-ndk cdylib in $LIBDIR/$abi, but the CMake static lib $STATIC ($(stat -c%s "$STATIC") bytes) is present - Gradle/CMake will produce the packaged libnewpgp_mobile.so."
+              continue
+            fi
+            echo "::error title=Native bridge::Neither a native library in $LIBDIR/$abi nor the CMake static lib $STATIC exists for $abi - the APK cannot include the Rust bridge."
+            exit 1
           done
 
       - uses: gradle/actions/setup-gradle@v4
@@ -421,23 +483,67 @@ jobs:
         if: env.SIGNING_READY == 'true'
         run: |
           set -euo pipefail
+          # An installed NDK is a directory with source.properties (and/or the
+          # legacy ndk-build script). A bare directory named "ndk*" is not
+          # enough - cmdline-tools and other SDK bits can match that pattern.
+          valid_ndk() {
+            [ -d "$1" ] || return 1
+            [ -f "$1/source.properties" ] || [ -x "$1/ndk-build" ] || return 1
+            return 0
+          }
+
           NDK=""
-          if [ -d "${ANDROID_HOME:-}/ndk" ]; then
-            NDK="$(find "$ANDROID_HOME/ndk" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | sort -V | tail -n 1)"
+          SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
+
+          # 1) Newest side-by-side NDK under $ANDROID_HOME/ndk.
+          if [ -n "$SDK" ] && [ -d "$SDK/ndk" ]; then
+            candidate="$(find "$SDK/ndk" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | sort -V | tail -n 1 || true)"
+            if valid_ndk "$candidate"; then NDK="$candidate"; fi
           fi
-          if [ -z "$NDK" ] && [ -n "${ANDROID_NDK_LATEST_HOME:-}" ]; then
-            NDK="$ANDROID_NDK_LATEST_HOME"
+
+          # 2) Canonical env vars exported by the runner image.
+          for candidate in "${ANDROID_NDK_HOME:-}" "${ANDROID_NDK_ROOT:-}" \
+                           "${ANDROID_NDK:-}" "${ANDROID_NDK_LATEST_HOME:-}"; do
+            if [ -z "$NDK" ] && valid_ndk "$candidate"; then NDK="$candidate"; fi
+          done
+
+          # 3) Legacy ndk-bundle or any other NDK-shaped dir under the SDK.
+          if [ -z "$NDK" ] && [ -n "$SDK" ] && [ -d "$SDK" ]; then
+            while IFS= read -r candidate; do
+              if [ -z "$NDK" ] && valid_ndk "$candidate"; then NDK="$candidate"; fi
+            done < <(find "$SDK" -maxdepth 3 -type d -name 'ndk*' 2>/dev/null | sort -V -r || true)
           fi
-          if [ -z "$NDK" ] && [ -n "${ANDROID_NDK_HOME:-}" ]; then
-            NDK="$ANDROID_NDK_HOME"
+
+          # 4) Nothing preinstalled: fetch a known-good NDK with sdkmanager.
+          if [ -z "$NDK" ]; then
+            echo "No preinstalled Android NDK found; installing one via sdkmanager."
+            SDKMGR=""
+            if command -v sdkmanager >/dev/null 2>&1; then
+              SDKMGR="$(command -v sdkmanager)"
+            elif [ -n "$SDK" ] && [ -x "$SDK/cmdline-tools/latest/bin/sdkmanager" ]; then
+              SDKMGR="$SDK/cmdline-tools/latest/bin/sdkmanager"
+            elif [ -n "$SDK" ]; then
+              SDKMGR="$(find "$SDK/cmdline-tools" -mindepth 3 -maxdepth 3 -type f -name sdkmanager 2>/dev/null | sort -V | tail -n 1 || true)"
+            fi
+            if [ -z "$SDKMGR" ] || [ ! -x "$SDKMGR" ]; then
+              echo "::error title=Android NDK::No Android NDK found and sdkmanager is unavailable - the Rust crypto bridge cannot be built."
+              exit 1
+            fi
+            yes | "$SDKMGR" --licenses > /dev/null 2>&1 || true
+            for ver in 27.2.12479018 27.3.13750724 26.3.11579264; do
+              echo "Installing ndk;$ver ..."
+              if "$SDKMGR" "ndk;$ver" > /dev/null 2>&1 && [ -n "$SDK" ]; then
+                candidate="$SDK/ndk/$ver"
+                if valid_ndk "$candidate"; then NDK="$candidate"; break; fi
+              fi
+            done
+            if [ -z "$NDK" ]; then
+              echo "::error title=Android NDK::sdkmanager could not install any known Android NDK - the Rust crypto bridge cannot be built."
+              exit 1
+            fi
+            echo "::notice title=Android NDK::Installed NDK at $NDK"
           fi
-          if [ -z "$NDK" ] && [ -d "${ANDROID_HOME:-}/ndk-bundle" ]; then
-            NDK="$ANDROID_HOME/ndk-bundle"
-          fi
-          if [ -z "$NDK" ] || [ ! -d "$NDK" ]; then
-            echo "::error title=Android NDK::No Android NDK found under $ANDROID_HOME/ndk - cargo-ndk needs one."
-            exit 1
-          fi
+
           echo "Using Android NDK: $NDK"
           echo "ANDROID_NDK_HOME=$NDK" >> "$GITHUB_ENV"
           echo "ANDROID_NDK_ROOT=$NDK" >> "$GITHUB_ENV"
@@ -447,19 +553,41 @@ jobs:
         run: |
           set -euo pipefail
           LIBDIR="android/keyboard/app/build/newpgp/jniLibs"
+          RUST_TARGET_DIR="crates/newpgp-mobile/target"
+          # newpgp-mobile is its own workspace root, so point cargo at its
+          # manifest and make the target dir explicit: CMake imports the Rust
+          # staticlib from exactly this directory (NEWPGP_RUST_TARGET_DIR).
           cargo ndk -t arm64-v8a -t armeabi-v7a -t x86_64 \
             -o "$LIBDIR" build --release \
-            --manifest-path crates/newpgp-mobile/Cargo.toml -p newpgp-mobile
+            --manifest-path crates/newpgp-mobile/Cargo.toml \
+            --target-dir "$RUST_TARGET_DIR" -p newpgp-mobile
+
+          # cargo-ndk writes the cdylib .so into $LIBDIR/<abi>, but the APK's
+          # libnewpgp_mobile.so is produced by CMake (C++ JNI shim + Rust
+          # staticlib). Accept either output: a non-empty .so from cargo-ndk,
+          # OR the staticlib CMake imports. Never fail the job just because the
+          # intermediate cdylib was not copied into $LIBDIR.
           for abi in arm64-v8a armeabi-v7a x86_64; do
+            case "$abi" in
+              arm64-v8a) triple="aarch64-linux-android" ;;
+              armeabi-v7a) triple="armv7-linux-androideabi" ;;
+              x86_64) triple="x86_64-linux-android" ;;
+            esac
             found=""
             for name in libnewpgp_mobile.so libnewpgp_jni.so; do
               if [ -s "$LIBDIR/$abi/$name" ]; then found="$name"; break; fi
             done
-            if [ -z "$found" ]; then
-              echo "::error title=Native bridge::No native library found for $abi in $LIBDIR/$abi (expected libnewpgp_mobile.so or libnewpgp_jni.so)."
-              exit 1
+            if [ -n "$found" ]; then
+              echo "Prepared $LIBDIR/$abi/$found ($(stat -c%s "$LIBDIR/$abi/$found") bytes)"
+              continue
             fi
-            echo "Prepared $LIBDIR/$abi/$found ($(stat -c%s "$LIBDIR/$abi/$found") bytes)"
+            STATIC="$RUST_TARGET_DIR/$triple/release/libnewpgp_mobile.a"
+            if [ -s "$STATIC" ]; then
+              echo "::notice title=Native bridge::No cargo-ndk cdylib in $LIBDIR/$abi, but the CMake static lib $STATIC ($(stat -c%s "$STATIC") bytes) is present - Gradle/CMake will produce the packaged libnewpgp_mobile.so."
+              continue
+            fi
+            echo "::error title=Native bridge::Neither a native library in $LIBDIR/$abi nor the CMake static lib $STATIC exists for $abi - the APK cannot include the Rust bridge."
+            exit 1
           done
 
       - uses: gradle/actions/setup-gradle@v4
