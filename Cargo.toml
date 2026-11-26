@@ -11,19 +11,19 @@ members = [
 ]
 
 [workspace.package]
-version = "0.1.0"
+version = "0.1.3"
 edition = "2021"
 rust-version = "1.88"
 license = "GPL-3.0-or-later"
 authors = ["Vaibhav (@thisisforlearn) <nekomeowpurr@proton.me>", "thisisforlearn", "sudo-linux-neko"]
 
 [workspace.dependencies]
-newpgp-core = { path = "crates/newpgp-core", version = "0.1.0" }
-newpgp-keyring = { path = "crates/newpgp-keyring", version = "0.1.0" }
-newpgp-discovery = { path = "crates/newpgp-discovery", version = "0.1.0" }
-newpgp-backup = { path = "crates/newpgp-backup", version = "0.1.0" }
-newpgp-mail = { path = "crates/newpgp-mail", version = "0.1.0" }
-newpgp-search = { path = "crates/newpgp-search", version = "0.1.0" }
+newpgp-core = { path = "crates/newpgp-core", version = "0.1.3" }
+newpgp-keyring = { path = "crates/newpgp-keyring", version = "0.1.3" }
+newpgp-discovery = { path = "crates/newpgp-discovery", version = "0.1.3" }
+newpgp-backup = { path = "crates/newpgp-backup", version = "0.1.3" }
+newpgp-mail = { path = "crates/newpgp-mail", version = "0.1.3" }
+newpgp-search = { path = "crates/newpgp-search", version = "0.1.3" }
 
 pgp = "0.21.1"
 async-trait = "0.1"
