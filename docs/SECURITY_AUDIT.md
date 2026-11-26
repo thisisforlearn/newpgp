@@ -1,5 +1,8 @@
 # Security audit exceptions
 
+**Written: 2026-11-26.** The 90-day review date below (2027-02-24) is measured
+from this date.
+
 NewPGP's `audit` CI job runs `cargo audit --file Cargo.lock` and is a real,
 blocking check: it fails on any unignored advisory. Two advisories are
 currently ignored, by ID only, in [`.cargo/audit.toml`](../.cargo/audit.toml)
@@ -61,7 +64,17 @@ following happens:
   support (then this exception no longer applies and must be removed before
   that code ships);
 - a new advisory affects these crates or a different NewPGP code path;
-- the `pgp` dependency version changes for any reason.
+- the `pgp` dependency version changes for any reason;
+- **cargo-audit changes.** The CI job installs it with
+  `cargo install cargo-audit --locked` and **no version pin**, so it uses
+  whatever the latest published release is at install time: **cargo-audit
+  0.23.0** as of this writing (published 2026-11-10, see
+  <https://crates.io/crates/cargo-audit>), which is what CI uses today and
+  matches the config note in `.cargo/audit.toml`. Whenever a new release
+  changes what CI resolves to, re-check `.cargo/audit.toml`: a new version can
+  change which config keys are accepted or how stale ignores are reported, so
+  an ignore that is valid today may be rejected or may need removal. Pinning
+  the version in CI would remove this reproducibility gap.
 
 The manual review conditions above are the reminder to clean up the config:
 run `cargo audit` after every dependency change and remove either ignore as soon
@@ -75,6 +88,10 @@ Run the same check CI runs, from the repository root:
 cargo install cargo-audit --locked   # once
 cargo audit --file Cargo.lock
 ```
+
+`cargo install cargo-audit --locked` above is unpinned, so locally you may get a
+different version than CI did on a given day; check `cargo audit --version` and
+re-check `.cargo/audit.toml` whenever the version differs.
 
 To see the underlying dependency paths, `cargo audit` prints inverse dependency
 trees by default. To view all advisories without the config exceptions, run it

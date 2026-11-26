@@ -179,8 +179,6 @@ jobs:
     # the signing-secret gate is a job-level env var checked by each step.
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     env:
       ANDROID_HOME: /usr/local/lib/android/sdk
       ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
@@ -192,7 +190,8 @@ jobs:
     steps:
       - name: Skip release when signing secrets are not configured
         if: env.SIGNING_READY != 'true'
-        run: echo "::notice title=Signed release skipped::Signing secrets are not configured; no signed release APK will be built."
+        run: |
+          echo "::notice title=Signed release skipped::Signing secrets are not configured; signed release APKs are not yet available. Normal tag builds still pass; release-all.yml publishes the unsigned debug APKs."
 
       - uses: actions/checkout@v4
         if: env.SIGNING_READY == 'true'
@@ -262,10 +261,6 @@ jobs:
           path: android/keyboard/app/build/outputs/apk/release/*.apk
           if-no-files-found: error
 
-      - name: Publish GitHub release
-        if: env.SIGNING_READY == 'true'
-        uses: softprops/action-gh-release@v2
-        with:
-          files: android/keyboard/app/build/outputs/apk/release/*.apk
-          generate_release_notes: true
-          fail_on_unmatched_files: false
+      # No `softprops/action-gh-release` here: release-all.yml is the only
+      # workflow allowed to create/modify a GitHub release, and only once all
+      # required builds have succeeded for the tagged commit.

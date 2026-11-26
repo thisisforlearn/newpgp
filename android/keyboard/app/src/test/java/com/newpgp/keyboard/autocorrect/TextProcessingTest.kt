@@ -42,4 +42,11 @@ class TextProcessingTest {
         assertEquals("", TextProcessing.separatorBefore("Hi", "!"))
         assertEquals("", TextProcessing.separatorBefore("Hi", ")"))
     }
+
+    @Test
+    fun whitespaceAfterNeverNeedsASeparator() {
+        assertEquals("", TextProcessing.separatorBefore("Hi.", " there"))
+        assertEquals("", TextProcessing.separatorBefore("Hi", " "))
+        assertEquals("", TextProcessing.separatorBefore("Hi.", "\n"))
+    }
 }

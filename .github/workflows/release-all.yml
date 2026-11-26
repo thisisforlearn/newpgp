@@ -1,0 +1,320 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Aggregate artifacts produced by the per-platform workflows into ONE GitHub
+# Release for a pushed v* tag.
+#
+# Design notes:
+#   * `workflow_run` fires when any of the four source workflows completes.
+#     The job resolves the v* tag for the run's head SHA, waits for the three
+#     tag-triggered builds to finish, and downloads their artifacts by run ID
+#     (download-artifact can read another run's artifacts with `run-id`,
+#     `repository` and `github-token`).
+#   * Publication is gated on ALL three required builds having a SUCCESSFUL,
+#     artifact-producing run for the tagged SHA, and on the downloaded asset
+#     groups being non-empty. Failed builds or zero assets => no release.
+#   * Browser Extension is not tag-triggered; its package comes from the most
+#     recent successful push run on main and is optional.
+#   * `concurrency` keyed by commit SHA serialises the near-simultaneous
+#     triggers; softprops/action-gh-release updates the same tag idempotently.
+#   * softprops/action-gh-release was bumped v2 -> v3 because upstream states
+#     v2 is unmaintained and runs on the deprecated Node 20 runtime.
+#
+# NOTE: `if-no-files-found` is an upload-artifact input; download-artifact has
+# no equivalent, so "no files found" is handled by the explicit verify step.
+
+name: Publish unified release
+
+on:
+  workflow_run:
+    workflows:
+      - Desktop Release
+      - CLI Binaries
+      - Android APK
+      - Browser Extension
+    types: [completed]
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: release-all-${{ github.event.workflow_run.head_sha }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Aggregate artifacts and publish release
+    if: github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Resolve tag and source runs
+        id: resolve
+        env:
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          HEAD_REF: ${{ github.event.workflow_run.head_branch }}
+          TRIGGER_NAME: ${{ github.event.workflow_run.name }}
+        run: |
+          set -euo pipefail
+          repo="$GITHUB_REPOSITORY"
+          tag=""
+          desktop_run=""
+          cli_run=""
+          android_run=""
+          ext_run=""
+          ready=false
+
+          # Always emit all outputs, including on the early (skip) paths.
+          finish() {
+            {
+              echo "tag=$tag"
+              echo "ready=$ready"
+              echo "desktop_run=$desktop_run"
+              echo "cli_run=$cli_run"
+              echo "android_run=$android_run"
+              echo "ext_run=$ext_run"
+            } >> "$GITHUB_OUTPUT"
+            exit 0
+          }
+
+          # A tag push reports the tag name in head_branch. Verify the ref
+          # exists before trusting it; otherwise look for a v* tag at HEAD_SHA
+          # (dereferencing annotated tags, whose .commit.sha is the tag object).
+          if [[ "$HEAD_REF" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z.-]+)?$ ]]; then
+            if gh api "repos/$repo/git/ref/tags/$HEAD_REF" >/dev/null 2>&1; then
+              tag="$HEAD_REF"
+            fi
+          fi
+          if [ -z "$tag" ]; then
+            while IFS= read -r candidate; do
+              [ -n "$candidate" ] || continue
+              ref_json="$(gh api "repos/$repo/git/ref/tags/$candidate" 2>/dev/null || true)"
+              [ -n "$ref_json" ] || continue
+              object_sha="$(printf '%s' "$ref_json" | jq -r '.object.sha // empty')"
+              object_type="$(printf '%s' "$ref_json" | jq -r '.object.type // empty')"
+              if [ "$object_type" = "tag" ]; then
+                object_sha="$(gh api "repos/$repo/git/tags/$object_sha" --jq '.object.sha // empty' 2>/dev/null || true)"
+              fi
+              if [ "$object_sha" = "$HEAD_SHA" ]; then
+                tag="$candidate"
+                break
+              fi
+            done < <(gh api "repos/$repo/tags?per_page=100" --jq '.[].name | select(startswith("v"))' 2>/dev/null || true)
+          fi
+          if [ -z "$tag" ]; then
+            echo "::notice title=Release skipped::Trigger '$TRIGGER_NAME' on $HEAD_REF ($HEAD_SHA) has no v* tag; skipping aggregation."
+            finish
+          fi
+          echo "Resolved release tag: $tag (from $TRIGGER_NAME)"
+
+          # The first completed workflow triggers us; the other tag builds may
+          # still be queued/in progress. Wait until all three have a completed
+          # run for this SHA (bounded at ~20 minutes).
+          for attempt in $(seq 1 40); do
+            status_lines="$(gh api "repos/$repo/actions/runs?head_sha=$HEAD_SHA&per_page=100" --jq '
+              ["Desktop Release", "CLI Binaries", "Android APK"] as $names
+              | $names[] as $name
+              | [.workflow_runs[] | select(.name == $name)] as $runs
+              | [$name,
+                 ($runs | map(select(.status == "queued" or .status == "in_progress" or .status == "waiting")) | length),
+                 ($runs | map(select(.status == "completed")) | length)]
+                | @tsv' 2>/dev/null || true)"
+            pending=0
+            completed_workflows=0
+            while IFS=$'\t' read -r wname n_pending n_completed; do
+              [ -n "$wname" ] || continue
+              pending=$((pending + ${n_pending:-0}))
+              if [ "${n_completed:-0}" -gt 0 ]; then
+                completed_workflows=$((completed_workflows + 1))
+              fi
+            done <<< "$status_lines"
+            if [ "$pending" -eq 0 ] && { [ "$completed_workflows" -eq 3 ] || [ "$attempt" -ge 8 ]; }; then
+              break
+            fi
+            echo "Waiting for required release builds (pending=$pending, completed=$completed_workflows/3, attempt=$attempt/40)..."
+            sleep 30
+          done
+
+          # Resolve one successful, artifact-producing run per required
+          # workflow for the tagged SHA. A failed or artifact-less build gives
+          # an empty ID and blocks publication below. The extension has no tag
+          # trigger, so use its latest successful push run on main (optional).
+          resolve_run() {
+            local scope="$1" name="$2" sha="$3" ids candidate count
+            if [ "$scope" = "sha" ]; then
+              ids="$(gh api "repos/$repo/actions/runs?head_sha=$sha&status=completed&per_page=100" \
+                --jq "[.workflow_runs[] | select(.name == \"$name\" and .conclusion == \"success\") | .id] | .[]" 2>/dev/null || true)"
+            else
+              ids="$(gh api "repos/$repo/actions/runs?event=push&branch=main&status=completed&per_page=100" \
+                --jq "[.workflow_runs[] | select(.name == \"$name\" and .conclusion == \"success\") | .id] | .[]" 2>/dev/null || true)"
+            fi
+            for candidate in $ids; do
+              count="$(gh api "repos/$repo/actions/runs/$candidate/artifacts?per_page=100" \
+                --jq '.total_count // 0' 2>/dev/null || echo 0)"
+              if [ "${count:-0}" -gt 0 ]; then
+                echo "$candidate"
+                return 0
+              fi
+            done
+            return 0
+          }
+
+          desktop_run="$(resolve_run sha 'Desktop Release' "$HEAD_SHA")"
+          cli_run="$(resolve_run sha 'CLI Binaries' "$HEAD_SHA")"
+          android_run="$(resolve_run sha 'Android APK' "$HEAD_SHA")"
+          ext_run="$(resolve_run push 'Browser Extension' '')"
+          echo "Source runs: desktop=$desktop_run cli=$cli_run android=$android_run extension=$ext_run"
+
+          # Aggregation gate: never publish when a required build failed or
+          # produced no artifacts for the tagged commit.
+          missing=""
+          [ -n "$desktop_run" ] || missing="$missing Desktop Release"
+          [ -n "$cli_run" ] || missing="$missing CLI Binaries"
+          [ -n "$android_run" ] || missing="$missing Android APK"
+          if [ -n "$missing" ]; then
+            echo "::notice title=Release skipped::No successful, artifact-producing run for $HEAD_SHA:$missing. Required builds failed or produced no artifacts; not publishing."
+            finish
+          fi
+
+          ready=true
+          echo "All required builds succeeded with artifacts for $HEAD_SHA."
+          finish
+
+      - name: Download desktop artifacts
+        if: steps.resolve.outputs.ready == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          pattern: newpgp-desktop-*
+          path: release-assets/desktop
+          repository: ${{ github.repository }}
+          run-id: ${{ steps.resolve.outputs.desktop_run }}
+          github-token: ${{ github.token }}
+
+      - name: Download CLI artifacts
+        if: steps.resolve.outputs.ready == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          pattern: newpgp-cli-*
+          path: release-assets/cli
+          repository: ${{ github.repository }}
+          run-id: ${{ steps.resolve.outputs.cli_run }}
+          github-token: ${{ github.token }}
+
+      - name: Download Android debug APKs
+        if: steps.resolve.outputs.ready == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          pattern: newpgp-*-debug
+          path: release-assets/android
+          repository: ${{ github.repository }}
+          run-id: ${{ steps.resolve.outputs.android_run }}
+          github-token: ${{ github.token }}
+
+      - name: Download signed APK if available
+        if: steps.resolve.outputs.ready == 'true'
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          pattern: newpgp-keyboard-release
+          path: release-assets/android
+          repository: ${{ github.repository }}
+          run-id: ${{ steps.resolve.outputs.android_run }}
+          github-token: ${{ github.token }}
+
+      - name: Download browser extension artifact
+        if: steps.resolve.outputs.ready == 'true' && steps.resolve.outputs.ext_run != ''
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          pattern: newpgp-browser-extension
+          path: release-assets/extension
+          repository: ${{ github.repository }}
+          run-id: ${{ steps.resolve.outputs.ext_run }}
+          github-token: ${{ github.token }}
+
+      - name: Verify required asset groups
+        id: verify
+        if: steps.resolve.outputs.ready == 'true'
+        run: |
+          set -euo pipefail
+          ok=true
+          for group in desktop cli android; do
+            count="$(find "release-assets/$group" -type f 2>/dev/null | wc -l)"
+            if [ "$count" -eq 0 ]; then
+              echo "::warning title=Missing required asset group::$group artifacts are empty; not publishing."
+              ok=false
+            fi
+          done
+          echo "ok=$ok" >> "$GITHUB_OUTPUT"
+
+      - name: Normalize asset names and generate SHA256SUMS.txt
+        if: steps.resolve.outputs.ready == 'true' && steps.verify.outputs.ok == 'true'
+        run: |
+          set -euo pipefail
+          # macOS and Linux CLI artifacts both contain a file named `newpgp`;
+          # give them unique release asset names.
+          if [ -d release-assets/cli ]; then
+            while IFS= read -r -d '' f; do
+              folder="$(basename "$(dirname "$f")")"
+              target="${folder#newpgp-cli-}"
+              case "$f" in
+                *.exe) mv "$f" "$(dirname "$f")/newpgp-${target}.exe" ;;
+                *)     mv "$f" "$(dirname "$f")/newpgp-${target}" ;;
+              esac
+            done < <(find release-assets/cli -type f \( -name 'newpgp' -o -name 'newpgp.exe' \) -print0)
+          fi
+          # Android artifacts share app-debug.apk / app-release.apk names;
+          # prefix with the artifact name so release asset names stay unique.
+          if [ -d release-assets/android ]; then
+            while IFS= read -r -d '' f; do
+              folder="$(basename "$(dirname "$f")")"
+              mv "$f" "$(dirname "$f")/${folder}-$(basename "$f")"
+            done < <(find release-assets/android -type f \( -name 'app-debug.apk' -o -name 'app-release.apk' \) -print0)
+          fi
+
+          # Basenames let `sha256sum -c SHA256SUMS.txt` work after
+          # `gh release download` puts every asset in one flat folder.
+          sumfile="release-assets/SHA256SUMS.txt"
+          : > "$sumfile"
+          find release-assets -type f ! -name 'SHA256SUMS.txt' -print0 | sort -z | while IFS= read -r -d '' f; do
+            hash="$(sha256sum "$f" | cut -d' ' -f1)"
+            printf '%s  %s\n' "$hash" "$(basename "$f")" >> "$sumfile"
+          done
+          echo "Wrote $sumfile with $(wc -l < "$sumfile") checksums"
+          find release-assets -type f -printf '%f\n' | sort | uniq -d | while read -r dup; do
+            echo "::warning title=Duplicate asset name::$dup appears more than once; only one will be uploaded."
+          done
+          find release-assets -type f -printf '%f\n' | sort
+
+      - name: Publish release with all assets
+        if: steps.resolve.outputs.ready == 'true' && steps.verify.outputs.ok == 'true'
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ steps.resolve.outputs.tag }}
+          generate_release_notes: true
+          overwrite_files: true
+          fail_on_unmatched_files: false
+          files: |
+            release-assets/**/*.msi
+            release-assets/**/*.exe
+            release-assets/**/*.dmg
+            release-assets/**/*.tar.gz
+            release-assets/**/*.deb
+            release-assets/**/*.AppImage
+            release-assets/**/*.apk
+            release-assets/**/*.zip
+            release-assets/**/*.crx
+            release-assets/**/*.xpi
+            release-assets/**/newpgp-macos
+            release-assets/**/newpgp-linux
+            release-assets/SHA256SUMS.txt
+
+      - name: Report published assets
+        if: steps.resolve.outputs.ready == 'true' && steps.verify.outputs.ok == 'true'
+        run: |
+          set -euo pipefail
+          count="$(find release-assets -type f ! -name 'SHA256SUMS.txt' | wc -l)"
+          echo "Published $count asset(s) for tag ${{ steps.resolve.outputs.tag }}."

@@ -6,7 +6,7 @@
 
 ## Supported versions
 
-Security fixes are provided for the latest released version. Version 0.1 is an alpha: older versions may not receive fixes.
+Security fixes target the current **0.1.x alpha** (the latest released version). Pre-release builds and older versions may not receive fixes. Please update before reporting, and send private reports to **nekomeowpurr@proton.me** (details below).
 
 ## Reporting a vulnerability
 

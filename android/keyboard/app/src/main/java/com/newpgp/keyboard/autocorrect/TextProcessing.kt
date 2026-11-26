@@ -14,9 +14,12 @@ object TextProcessing {
 
     /** True at the very beginning of a field, after a newline, or after sentence-ending punctuation. */
     fun isSentenceStart(contextBefore: String): Boolean {
+        // Check the raw context first: trimEnd() would remove the newline we
+        // are trying to detect ("First line\n" → "First line").
+        if (contextBefore.isEmpty()) return true
+        if (contextBefore.last() == '\n') return true
         val trimmed = contextBefore.trimEnd()
         if (trimmed.isEmpty()) return true
-        if (trimmed.last() == '\n') return true
         val lower = trimmed.lowercase(Locale.ROOT)
         if (ABBREVIATIONS.any { lower.endsWith("$it.") }) return false
         return trimmed.last() in ".!?"
@@ -43,6 +46,7 @@ object TextProcessing {
         if (last.isWhitespace()) return ""
         if (OPENING_PUNCTUATION.contains(last)) return ""
         val first = nextWord.firstOrNull() ?: return ""
+        if (first.isWhitespace()) return ""
         if (ATTACHED_PUNCTUATION.contains(first)) return ""
         return " "
     }

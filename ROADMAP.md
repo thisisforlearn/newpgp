@@ -32,10 +32,18 @@ Goal: a friendly, standards-compliant OpenPGP suite that a non-technical person 
 
 ## Phase 2 — Deeper platform integration
 
+- [Planned] **`newpgp-mobile` + UniFFI:** a shared Rust crate exposing `newpgp-core`, `newpgp-keyring` and `newpgp-discovery` to Swift/Kotlin through generated UniFFI bindings, so mobile apps use the same engine as the CLI and desktop app.
+- [Planned] **iOS real bridge:** replace the fail-closed `RustPgpBridge` stub in the SwiftUI shell with those generated bindings; see [ios/README.md](ios/README.md). The in-memory mock must never ship in a release build.
+- [Planned] **Android native bridge integration:** build `newpgp-core` for Android ABIs and wire the generated Kotlin bindings and `.so` files into the companion app's `NativePgpBridge` and the keyboard IME's `NativePgpBridge`, with Android Keystore key storage and recipient selection; see [android/app/README.md](android/app/README.md) and [android/keyboard/README.md](android/keyboard/README.md).
 - [Planned] Broader mail-client and webmail support beyond Gmail/Outlook.
 - [Planned] Improved backup/restore flows following [KEY_TRANSFER.md](docs/KEY_TRANSFER.md) guidance.
 - [Planned] Optional PAKE-based key transfer (OPAQUE/SPAKE2) for two parties online at the same time.
 - [Planned] Key rotation and expiry handling with clear user guidance.
+
+> **Mobile status today:** iOS and Android have UI shells and bridge contracts,
+> but no real cryptography. Mock bridges produce clearly labelled fake armor in
+> tests/local demos only, and the default native bridges **fail closed**. There
+> is no shipped mobile crypto until the items above land.
 
 ## Phase 3 — Forward secrecy (explicitly NOT in v0.1)
 
@@ -60,6 +68,7 @@ Goal: a friendly, standards-compliant OpenPGP suite that a non-technical person 
 | Core crypto + key discovery + mail UX | Phase 0 (v0.1) |
 | Audit & release hardening | Phase 1 |
 | Backup/transfer UX & PAKE | Phase 2 |
+| Mobile apps (`newpgp-mobile`/UniFFI, iOS + Android bridges) | Phase 2 (planned; mocks/stubs fail closed) |
 | Forward secrecy (ratchet hybrid) | Phase 3, deferred |
 | New crypto protocol, metadata hiding | Out of scope |
 

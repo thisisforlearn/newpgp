@@ -23,7 +23,8 @@ class KeyboardView @JvmOverloads constructor(
 ) : View(context, attrs) {
 
     interface OnKeyListener {
-        fun onKey(key: KeyDef)
+        /** Return true when the key was handled (e.g. Enter consumed an editor action). */
+        fun onKey(key: KeyDef): Boolean
     }
 
     var onKeyListener: OnKeyListener? = null
@@ -34,6 +35,7 @@ class KeyboardView @JvmOverloads constructor(
     private var shiftState = ShiftState.OFF
     private var keys: List<PositionedKey> = emptyList()
     private var pressedKey: PositionedKey? = null
+    private var activePointerId = MotionEvent.INVALID_POINTER_ID
 
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val iconCache = mutableMapOf<Int, Drawable>()
@@ -163,33 +165,55 @@ class KeyboardView @JvmOverloads constructor(
     }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
-        val x = event.x
-        val y = event.y
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
-                pressedKey = keyAt(x, y)
+                activePointerId = event.getPointerId(0)
+                pressedKey = keyAt(event.getX(0), event.getY(0))
                 if (pressedKey != null) {
                     performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
                 }
                 invalidate()
                 return pressedKey != null
             }
+            MotionEvent.ACTION_POINTER_DOWN -> {
+                // Secondary fingers must never trigger or retarget a key.
+                return true
+            }
             MotionEvent.ACTION_MOVE -> {
-                val candidate = keyAt(x, y)
+                val index = event.findPointerIndex(activePointerId)
+                if (index < 0) return true
+                val candidate = keyAt(event.getX(index), event.getY(index))
                 if (candidate != pressedKey) {
                     pressedKey = candidate
                     invalidate()
                 }
                 return true
             }
-            MotionEvent.ACTION_UP -> {
-                val tapped = keyAt(x, y)
-                pressedKey = null
+            MotionEvent.ACTION_POINTER_UP -> {
+                if (event.getPointerId(event.actionIndex) == activePointerId) {
+                    val fallback = if (event.actionIndex == 0) 1 else 0
+                    if (fallback < event.pointerCount) {
+                        activePointerId = event.getPointerId(fallback)
+                        pressedKey = keyAt(event.getX(fallback), event.getY(fallback))
+                    } else {
+                        activePointerId = MotionEvent.INVALID_POINTER_ID
+                        pressedKey = null
+                    }
+                }
                 invalidate()
-                if (tapped != null) onKeyListener?.onKey(tapped.def)
                 return true
             }
+            MotionEvent.ACTION_UP -> {
+                if (event.getPointerId(event.actionIndex) != activePointerId) return true
+                val tapped = keyAt(event.getX(event.actionIndex), event.getY(event.actionIndex))
+                val handled = if (tapped != null) onKeyListener?.onKey(tapped.def) == true else false
+                activePointerId = MotionEvent.INVALID_POINTER_ID
+                pressedKey = null
+                invalidate()
+                return handled || tapped != null
+            }
             MotionEvent.ACTION_CANCEL -> {
+                activePointerId = MotionEvent.INVALID_POINTER_ID
                 pressedKey = null
                 invalidate()
                 return true

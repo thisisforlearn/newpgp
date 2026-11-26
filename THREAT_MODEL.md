@@ -11,14 +11,14 @@ This document states plainly what NewPGP protects, what it does not, and who it 
 | Message contents | OpenPGP encryption (RFC 9580) via rPGP |
 | Attachments (files, images, video) | Encrypted as arbitrary bytes, same as text |
 | Private key at rest | RFC 9580 S2K: Argon2id or iterated+salted SHA-256/512 derivation, then AES encryption |
-| Drafts | Encrypted to self before saving, so webmail providers cannot autosave plaintext |
+| Drafts (built-in client only) | Drafts saved by the built-in NewPGP mail client are encrypted to self. The browser extension's default **send-both** mode deliberately includes the plaintext body in the sent message; see below. |
 | Search history / decrypted index | Stored locally, encrypted; no server-side search |
 | Your social graph | keys.openpgp.org usage avoids third-party-signature leaks |
 
 ## Adversaries we consider
 
 - **Passive network eavesdropper** (someone on your Wi-Fi, an ISP observer): message contents are ciphertext.
-- **Mail provider / webmail service**: with encrypted drafts and client-side encryption, they do not see plaintext message bodies (but do see metadata — see below).
+- **Mail provider / webmail service**: messages sent in **PGP-only** mode from the built-in client are ciphertext to the provider, and drafts saved by that client are encrypted to self. This does **not** hold for the browser extension's default **send-both** mode, which deliberately sends the plaintext body alongside the armored block. In all cases the provider sees metadata (see below).
 - **Someone who steals a backup file**: protected by a strong password derived with Argon2id and encrypted with AES.
 - **An attacker who tampers with a key lookup**: mitigated by WKD rules, TOFU, and safety numbers you can compare out of band.
 
@@ -35,6 +35,20 @@ OpenPGP encrypts the message body, not the envelope. SMTP still exposes:
 - often message size and routing information.
 
 NewPGP cannot solve this with OpenPGP alone. If metadata secrecy matters to you, this tool is not sufficient.
+
+### The extension's send-both default exposes the plaintext body
+
+This is a deliberate design choice, not a bug. The browser extension's default
+**send-both** mode sends your message as written (**plaintext**) followed by the
+OpenPGP armored block, so friends who do not use PGP can still read your mail.
+That means the webmail provider — and anyone able to read the stored message on
+its servers — can read the plaintext body. Switching the extension to **PGP
+only** removes the plaintext body, but then non-PGP recipients cannot read it.
+
+**Encrypted drafts-to-self apply to the built-in NewPGP mail client only.** The
+extension does not delete or encrypt drafts in Gmail/Outlook, and those services
+may autosave a draft before NewPGP encrypts it. For sensitive conversations, use
+the built-in client and choose PGP-only mode.
 
 ### No forward secrecy
 
@@ -87,7 +101,7 @@ Encryption cannot protect you if you are tricked into giving away your password 
 | Threat | Status |
 | --- | --- |
 | Eavesdropper reading message contents | Protected (OpenPGP) |
-| Mail provider autosaving plaintext drafts | Mitigated (encrypted drafts to self) |
+| Mail provider reading plaintext bodies | Built-in client PGP-only messages and drafts-to-self are ciphertext; extension send-both exposes the body by design |
 | Key lookup tampering | Mitigated (WKD rules, TOFU, safety numbers) |
 | Social graph leak via key server | Mitigated (keys.openpgp.org strips third-party sigs) |
 | Metadata (who/when/subject) | **Not protected** |

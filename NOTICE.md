@@ -18,9 +18,11 @@ More platforms are coming soon.
 
 ## Why GPL-3.0-or-later
 
-GPLv2 was originally requested, but it has a real dependency nuance: a few
-transitive libraries are **Apache-2.0-only** (for example `ring` through rustls,
-`sync_wrapper`, and `borsh-derive`). The Free Software Foundation considers
+GPLv2 was originally requested, but it has a real dependency nuance: two
+transitive libraries are **Apache-2.0-only** (`sync_wrapper` and
+`borsh-derive`). `ring` (through rustls) is **Apache-2.0 AND ISC**, not
+Apache-2.0-only; both of its license terms are GPLv3-compatible. The Free
+Software Foundation considers
 Apache-2.0 compatible with **GPLv3**, but not GPLv2. Choosing GPL-3.0-or-later
 makes the whole dependency set consistent and avoids that conflict.
 

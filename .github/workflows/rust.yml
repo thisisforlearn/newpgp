@@ -9,6 +9,8 @@ on:
       - "crates/**"
       - ".github/workflows/rust.yml"
       - "deny.toml"
+      - ".cargo/audit.toml"
+      - ".cargo/**"
   pull_request:
     branches: [main]
     paths:
@@ -17,6 +19,8 @@ on:
       - "crates/**"
       - ".github/workflows/rust.yml"
       - "deny.toml"
+      - ".cargo/audit.toml"
+      - ".cargo/**"
 
 # Keep the default token minimal; jobs that need more grant it explicitly.
 permissions:
@@ -89,9 +93,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      # NOTE: `deny.toml` is expected at the repository root. If it does not
-      # exist yet this job will fail until it is added; the workflow itself is
-      # correct and will pick the file up automatically once present.
       - uses: EmbarkStudios/cargo-deny-action@v2
         with:
           command: check

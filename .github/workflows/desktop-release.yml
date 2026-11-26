@@ -38,7 +38,7 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: apps/desktop -> target
+          workspaces: apps/desktop/src-tauri -> target
 
       - uses: actions/setup-node@v4
         with:
@@ -77,4 +77,4 @@ jobs:
         with:
           name: newpgp-desktop-${{ matrix.target }}
           path: ${{ matrix.artifact }}
-          if-no-files-found: ignore
+          if-no-files-found: error
